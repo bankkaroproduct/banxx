@@ -7,96 +7,118 @@ All colors MUST be HSL.
 */
 
 @layer base {
+  /*
+   * Banxx raw brand constants.
+   *
+   * Values are HSL triplets so they compose with Tailwind's hsl(var(--token))
+   * consumption. The source hex sits in the comment beside each one so design
+   * can verify against the brand book without converting anything.
+   *
+   * Brand-supplied values must not be altered.
+   */
   :root {
-    /* Base Colors */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 10%;
-    
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    
-    /* Blue - Primary Brand */
-    --mc-green-50: 210 100% 97%;
-    --mc-green-100: 210 100% 95%;
-    --mc-green-200: 210 100% 90%;
-    --mc-green-500: 210 100% 40%;
-    --mc-green-600: 210 100% 32%;
-    --mc-green-700: 210 100% 24%;
-    --mc-green-900: 210 100% 13%;
+    --banxx-indigo: 256 100% 60.4%;        /* #6A35FF */
+    --banxx-black: 0 0% 7.1%;              /* #121212 */
+    --banxx-purple-900: 249 28% 14.7%;     /* #1E1B30 */
+    --banxx-white: 0 0% 100%;              /* #FFFFFF */
 
-    /* Primary (Blue) */
-    --primary: 210 100% 40%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 210 100% 55%;
+    /* Derived, pending design sign-off */
+    --banxx-indigo-600: 256 74.5% 52.4%;   /* #5A2BE0 */
+    --banxx-indigo-300: 255 100% 74.1%;    /* #9B7BFF */
+    --banxx-indigo-050: 249 100% 97.5%;    /* #F4F2FF */
+    --banxx-border: 252 50% 92.2%;         /* #E5E1F5 */
+    --banxx-text: 0 0% 7.1%;               /* #121212 */
+    --banxx-text-muted: 250 12% 39.2%;     /* #5C5870 */
 
-    /* Secondary */
-    --secondary: 210 60% 95%;
-    --secondary-foreground: 210 100% 24%;
-    
-    /* Charcoal - Text Colors */
-    --charcoal-50: 210 40% 98%;
-    --charcoal-100: 214 32% 95%;
-    --charcoal-200: 214 32% 91%;
-    --charcoal-300: 215 20% 83%;
-    --charcoal-500: 215 16% 47%;
-    --charcoal-700: 215 20% 25%;
-    --charcoal-800: 220 18% 18%;
-    --charcoal-900: 220 13% 10%;
-    
-    /* Semantic Colors */
-    --success-50: 210 100% 97%;
-    --success-500: 210 100% 40%;
-    --success-700: 210 100% 24%;
-    
-    --warning-50: 48 100% 96%;
-    --warning-500: 38 92% 50%;
-    --warning-700: 32 95% 44%;
-    
-    --error-50: 0 86% 97%;
-    --error-500: 0 84% 60%;
-    --error-700: 0 70% 35%;
-    
-    --info-50: 214 100% 97%;
-    --info-500: 217 91% 60%;
-    --info-700: 217 83% 48%;
-    
-    /* UI Tokens */
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    
-    --accent: 210 100% 97%;
-    --accent-foreground: 210 80% 35%;
-    
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 210 100% 40%;
+    --banxx-success: 142 76.2% 36.3%;      /* #16A34A */
+    --banxx-warning: 32 94.6% 43.7%;       /* #D97706 */
+    --banxx-error: 0 72.2% 50.6%;          /* #DC2626 */
+  }
+
+  /*
+   * Light mode semantic tokens. Light is the default: these live on bare :root
+   * so a document with no theme class resolves to light.
+   */
+  :root {
+    --background: var(--banxx-white);
+    --foreground: var(--banxx-text);
+
+    --card: var(--banxx-white);
+    --card-foreground: var(--banxx-text);
+
+    --popover: var(--banxx-white);
+    --popover-foreground: var(--banxx-text);
+
+    /* Elevated surface: the tier above --background */
+    --surface-elevated: var(--banxx-indigo-050);
+    --surface-elevated-foreground: var(--banxx-text);
+
+    /*
+     * --primary is a FILL colour in both modes, always paired with
+     * --primary-foreground (white). It is never used for text.
+     */
+    --primary: var(--banxx-indigo);
+    --primary-foreground: var(--banxx-white);
+    --primary-hover: var(--banxx-indigo-600);
+    --primary-glow: var(--banxx-indigo-300);
+
+    /*
+     * --accent-text is the accessibility rule expressed as a token: the
+     * indigo that is SAFE AS TEXT in the current mode. Light mode: indigo on
+     * white is 5.89:1. Dark mode (below): indigo-300, because true indigo on
+     * #121212 is only 3.18:1 and fails WCAG AA for body text.
+     *
+     * Any indigo-coloured text, link or numeral must use this token. There is
+     * deliberately no token that yields true indigo as text in dark mode.
+     */
+    --accent-text: var(--banxx-indigo);
+
+    --secondary: var(--banxx-indigo-050);
+    --secondary-foreground: var(--banxx-indigo-600);
+
+    --muted: var(--banxx-indigo-050);
+    --muted-foreground: var(--banxx-text-muted);
+
+    --accent: var(--banxx-indigo-050);
+    --accent-foreground: var(--banxx-indigo-600);
+
+    --success: var(--banxx-success);
+    --warning: var(--banxx-warning);
+    --error: var(--banxx-error);
+    --destructive: var(--banxx-error);
+    --destructive-foreground: var(--banxx-white);
+
+    --border: var(--banxx-border);
+    --input: var(--banxx-border);
+    --ring: var(--banxx-indigo);
 
     --radius: 0.75rem;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(0 0% 100%), hsl(210 100% 97%));
-    --gradient-accent: linear-gradient(135deg, hsl(210 100% 40%), hsl(210 100% 55%));
-    --gradient-hero: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 100% 97%));
-    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(210 40% 98%));
+    --gradient-primary: linear-gradient(135deg, hsl(var(--banxx-white)), hsl(var(--banxx-indigo-050)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--banxx-indigo)), hsl(var(--banxx-indigo-600)));
+    /*
+     * For gradient CLIP-TEXT headings. Both stops must pass AA as text in the
+     * mode they apply to. Light: indigo (5.89:1 on white) to indigo-600
+     * (darker, so better). Never --primary in dark mode, where indigo is
+     * 3.18:1 on #121212 and is a fill colour only.
+     */
+    --gradient-heading: linear-gradient(90deg, hsl(var(--banxx-indigo)), hsl(var(--banxx-indigo-600)));
+    --gradient-hero: linear-gradient(180deg, hsl(var(--banxx-white)), hsl(var(--banxx-indigo-050)));
+    --gradient-card: linear-gradient(135deg, hsl(var(--banxx-white)), hsl(var(--banxx-indigo-050)));
     --gradient-shimmer: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0) 100%);
     --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-    
+
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.15);
-    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.2);
-    --shadow-2xl: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
-    --shadow-glow: 0 0 30px hsl(210 100% 40% / 0.3);
-    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.04);
-    --shadow-card-hover: 0 12px 32px hsl(0 0% 0% / 0.12);
-    
+    --shadow-sm: 0 1px 2px 0 hsl(var(--banxx-black) / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(var(--banxx-black) / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(var(--banxx-black) / 0.12);
+    --shadow-xl: 0 20px 25px -5px hsl(var(--banxx-black) / 0.16);
+    --shadow-2xl: 0 25px 50px -12px hsl(var(--banxx-black) / 0.2);
+    --shadow-glow: 0 0 30px hsl(var(--banxx-indigo) / 0.3);
+    --shadow-card: 0 2px 8px hsl(var(--banxx-black) / 0.04);
+    --shadow-card-hover: 0 12px 32px hsl(var(--banxx-black) / 0.12);
+
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -124,34 +146,56 @@ All colors MUST be HSL.
     --fluid-caption: clamp(0.8125rem, 0.25vw + 0.7rem, 0.9375rem);
   }
 
+  /*
+   * Dark mode. Applied by next-themes as class="dark" on <html>.
+   *
+   * Only the tokens that differ are redefined, so anything omitted keeps its
+   * light value by design rather than by accident.
+   */
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: var(--banxx-black);
+    --foreground: var(--banxx-white);
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: var(--banxx-purple-900);
+    --card-foreground: var(--banxx-white);
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: var(--banxx-purple-900);
+    --popover-foreground: var(--banxx-white);
 
-    --primary: 210 100% 65%;
-    --primary-foreground: 0 0% 100%;
+    --surface-elevated: var(--banxx-purple-900);
+    --surface-elevated-foreground: var(--banxx-white);
 
-    --secondary: 210 60% 25%;
-    --secondary-foreground: 210 100% 95%;
+    /* Still true indigo: a fill, with white on top. 5.89:1 for white on indigo. */
+    --primary: var(--banxx-indigo);
+    --primary-foreground: var(--banxx-white);
+    --primary-hover: var(--banxx-indigo-600);
+    --primary-glow: var(--banxx-indigo-300);
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    /* Indigo-as-text in dark mode is indigo-300: 5.95:1 on #121212. */
+    --accent-text: var(--banxx-indigo-300);
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 100% 65%;
+    --secondary: var(--banxx-purple-900);
+    --secondary-foreground: var(--banxx-indigo-300);
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --muted: var(--banxx-purple-900);
+    --muted-foreground: 250 15% 72%;       /* lifted from #5C5870, which is unreadable on black */
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 210 100% 65%;
+    --accent: var(--banxx-purple-900);
+    --accent-foreground: var(--banxx-indigo-300);
+
+    --border: 249 20% 24%;                 /* purple-900 lifted, hairline on dark */
+    --input: 249 20% 24%;
+    --ring: var(--banxx-indigo-300);
+
+    --gradient-primary: linear-gradient(135deg, hsl(var(--banxx-purple-900)), hsl(var(--banxx-black)));
+    --gradient-hero: linear-gradient(180deg, hsl(var(--banxx-black)), hsl(var(--banxx-purple-900)));
+    --gradient-card: linear-gradient(135deg, hsl(var(--banxx-purple-900)), hsl(var(--banxx-black)));
+    --gradient-glass: linear-gradient(135deg, rgba(30, 27, 48, 0.95), rgba(18, 18, 18, 0.85));
+    /* Dark: indigo-300 (5.95:1 on #121212) to white. */
+    --gradient-heading: linear-gradient(90deg, hsl(var(--banxx-indigo-300)), hsl(var(--banxx-white)));
+
+    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.4);
+    --shadow-card-hover: 0 12px 32px hsl(0 0% 0% / 0.5);
   }
 }
 
@@ -641,13 +685,13 @@ All colors MUST be HSL.
     .cg-prev-btn {
       margin-bottom: 16px;
       border-width: 1px;
-      border-color: #0B7A8A;
-      color: #0B7A8A;
+      border-color: hsl(var(--primary));
+      color: hsl(var(--accent-text));
       background-color: transparent;
     }
 
     .cg-prev-btn:hover {
-      background-color: rgba(232, 244, 255, 0.4);
+      background-color: hsl(var(--accent) / 0.6);
     }
 
     .cg-prev-btn:disabled {
@@ -672,17 +716,17 @@ All colors MUST be HSL.
 
     .cg-next-btn {
       margin-top: 20px;
-      background-color: #0B7A8A;
-      color: #ffffff;
-      border-color: #0B7A8A;
+      background-color: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border-color: hsl(var(--primary));
     }
 
     .cg-next-btn:hover {
-      background-color: #085F6D;
+      background-color: hsl(var(--primary-hover));
     }
 
     .cg-next-btn:active {
-      background-color: #064D59;
+      background-color: hsl(var(--primary-hover));
     }
 
     .cg-skip-question-link {
@@ -756,8 +800,21 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
-  .font-playfair {
-    font-family: var(--font-playfair), Georgia, serif;
+  /*
+   * Dense figure display: fees, annual savings, income, score values.
+   *
+   * Raleway's default figures are proportional and comparatively light, so
+   * columns of numbers jitter and misalign. Tabular lining figures fix the
+   * advance width and sit on a consistent cap height.
+   */
+  .figure {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  .font-display {
+    font-family: var(--font-raleway), 'Raleway', system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
   .fluid-h1 {

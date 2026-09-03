@@ -5,7 +5,12 @@ import Navigation from "./Navigation";
 describe("Navigation mobile menu", () => {
   const setup = () => {
     render(<Navigation />);
-    const trigger = screen.getByLabelText(/open navigation menu/i);
+    const trigger = screen.getByLabelText(/open navigation menu/i) as HTMLElement;
+    // A real browser focuses a button on mousedown, so by the time the menu
+    // opens the trigger is the active element and the dialog can restore focus
+    // to it on close. fireEvent.click does not move focus in jsdom, so focus it
+    // explicitly or the focus-restore assertion tests jsdom, not the component.
+    trigger.focus();
     return { trigger };
   };
 

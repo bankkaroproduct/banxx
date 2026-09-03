@@ -199,11 +199,11 @@ export default function GeniusDialog({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col p-0">
       {/* Header - Fixed */}
-      <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-border bg-gradient-to-r from-[#E0F7F9]/20 to-background dark:from-[#0B7A8A]/20 dark:to-background">
+      <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-border bg-gradient-to-r from-surface-elevated to-background dark:to-background">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl md:text-2xl">
-            <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0B7A8A]">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
             </div>
             <div className="flex-1">
               <div className="font-bold text-foreground">Calculate {categoryLabels[category]} Savings</div>
@@ -226,7 +226,7 @@ export default function GeniusDialog({
             questions.map((question, index) => (
               <div key={question.key} className="space-y-2">
                 <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-2">
-                  <span className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#E0F7F9] text-primary text-xs font-bold">
+                  <span className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-surface-elevated text-primary text-xs font-bold">
                     {index + 1}
                   </span>
                   {question.label}
@@ -260,7 +260,7 @@ export default function GeniusDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-bold bg-[#0B7A8A] hover:bg-[#085F6D] text-white gap-2"
+            className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-bold bg-primary hover:bg-primary-hover text-primary-foreground gap-2"
           >
             <Sparkles className="w-4 h-4" />
             Calculate

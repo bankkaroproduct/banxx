@@ -48,7 +48,6 @@ const Footer = () => {
           <li><Link to="/card-genius" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Card Genius'); trackFooterQuickLinkClicked('AI Card Genius'); }}>AI Card Genius</Link></li>
           <li><Link to="/card-genius-category" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Category Card Genius'); trackFooterQuickLinkClicked('AI Category Card Genius'); }}>AI Category Card Genius</Link></li>
           <li><Link to="/beat-my-card" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Beat My Card'); trackFooterQuickLinkClicked('Beat My Card'); }}>Beat My Card</Link></li>
-          <li><Link to="/blogs" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Blogs'); trackFooterQuickLinkClicked('Blogs'); }}>Blogs</Link></li>
         </ul>
       )
     },

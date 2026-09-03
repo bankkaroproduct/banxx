@@ -148,7 +148,7 @@ export const CreditCard3D = ({
         />
 
         {/* Holographic Effect */}
-        <div className="absolute inset-0 rounded-3xl opacity-20 pointer-events-none bg-gradient-to-br from-[#E0F7F9] via-[#60A5FA] to-[#0B7A8A] mix-blend-overlay" />
+        <div className="absolute inset-0 rounded-3xl opacity-20 pointer-events-none bg-gradient-to-br from-surface-elevated via-[#60A5FA] to-primary mix-blend-overlay" />
 
         {/* Card Content */}
         <div className="relative z-10 p-8 h-full flex flex-col justify-between" style={{ transform: "translateZ(20px)" }}>
@@ -167,7 +167,7 @@ export const CreditCard3D = ({
           {/* Chip */}
           <div className="mt-8">
             <div className="w-14 h-11 bg-gradient-to-br from-yellow-200 via-yellow-300 to-yellow-400 rounded-lg shadow-xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-background/20 to-transparent" />
               <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-0.5 p-1.5">
                 <div className="bg-yellow-600/30 rounded-sm" />
                 <div className="bg-yellow-600/30 rounded-sm" />
@@ -181,7 +181,7 @@ export const CreditCard3D = ({
 
           {/* Card Number */}
           <div className="space-y-6">
-            <div className="flex justify-between font-mono text-white text-xl font-bold tracking-widest drop-shadow-lg">
+            <div className="flex justify-between font-mono text-primary-foreground text-xl font-bold tracking-widest drop-shadow-lg">
               <span>••••</span>
               <span>••••</span>
               <span>••••</span>
@@ -192,13 +192,13 @@ export const CreditCard3D = ({
             <div className="flex justify-between items-end">
               <div>
                 <div className="text-white/70 text-xs mb-1 uppercase tracking-wide">Card Holder</div>
-                <div className="text-white text-sm font-semibold tracking-wide drop-shadow">
+                <div className="text-primary-foreground text-sm font-semibold tracking-wide drop-shadow">
                   {cardName}
                 </div>
               </div>
               <div>
                 <div className="text-white/70 text-xs mb-1 uppercase tracking-wide">Expires</div>
-                <div className="text-white text-sm font-semibold tracking-wide drop-shadow">
+                <div className="text-primary-foreground text-sm font-semibold tracking-wide drop-shadow">
                   12/28
                 </div>
               </div>
@@ -211,7 +211,7 @@ export const CreditCard3D = ({
         </div>
 
         {/* Reflection Effect */}
-        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-background/5 via-transparent to-transparent pointer-events-none" />
       </div>
     </div>
   );

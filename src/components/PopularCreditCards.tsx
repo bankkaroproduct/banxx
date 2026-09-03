@@ -212,7 +212,7 @@ const PopularCreditCards = () => {
     <><section ref={sectionRef} className="py-12 sm:py-16 md:py-20 bg-muted/30">
       <div className="section-shell">
         <div className="text-center mb-6 sm:mb-8 space-y-2 sm:space-y-3 px-4">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 bg-gradient-to-r from-[#0B7A8A] to-[#E0F7F9] bg-clip-text text-transparent">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 bg-gradient-heading bg-clip-text text-transparent">
             Explore our Top Cards
           </h2>
           <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">Hand-picked recommendations curated by category.</p>
@@ -240,7 +240,7 @@ const PopularCreditCards = () => {
                       <TabsTrigger
                         key={key}
                         value={key}
-                        className="flex-shrink-0 whitespace-nowrap rounded-2xl text-xs sm:text-sm font-medium py-2.5 sm:py-3 px-4 sm:px-6 touch-target transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold data-[state=active]:scale-105 data-[state=active]:shadow-md data-[state=inactive]:bg-white data-[state=inactive]:text-foreground data-[state=inactive]:hover:bg-white/80 data-[state=inactive]:hover:scale-[1.02] border-0"
+                        className="flex-shrink-0 whitespace-nowrap rounded-2xl text-xs sm:text-sm font-medium py-2.5 sm:py-3 px-4 sm:px-6 touch-target transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold data-[state=active]:scale-105 data-[state=active]:shadow-md data-[state=inactive]:bg-card data-[state=inactive]:text-foreground data-[state=inactive]:hover:bg-card/80 data-[state=inactive]:hover:scale-[1.02] border-0"
                       >
                         {category.title}
                       </TabsTrigger>
@@ -279,7 +279,7 @@ const PopularCreditCards = () => {
 
                               {/* Key Benefit */}
                               {primaryUsp && (
-                                <div className="p-3 bg-gradient-to-r from-[#f0f9ff] to-[#E0F7F9] rounded-xl border border-[#0B7A8A]/20">
+                                <div className="p-3 bg-gradient-to-r from-surface-elevated to-surface-elevated rounded-xl border border-primary">
                                   <p className="font-bold text-sm text-primary mb-1 line-clamp-1">
                                     {primaryUsp.header}
                                   </p>
@@ -397,7 +397,7 @@ const PopularCreditCards = () => {
                           <div className="space-y-3 mb-6 flex-grow">
                             {topUsps.map((usp: any, i: number) => (
                               <div key={i} className="flex gap-3">
-                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#E0F7F9] flex items-center justify-center">
+                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surface-elevated flex items-center justify-center">
                                   <span className="text-primary text-xs font-bold">{i + 1}</span>
                                 </div>
                                 <div>

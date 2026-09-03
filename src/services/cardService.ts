@@ -1,8 +1,40 @@
 import { authManager } from './authManager';
+import type { EmpStatus } from '@/lib/eligibilityParams';
 
 // All card API calls are proxied through /api/proxy to avoid CORS preflight failures
 // on the external platform.bankkaro.com domain.
 const BASE_URL = '/api/proxy';
+
+/** Eligibility API. Called directly, not via the partner proxy. */
+const ELIGIBILITY_URL = 'https://bk-prod-external.bankkaro.com/sp/api/cg-eligiblity';
+
+export interface EligibilityCard {
+  seo_card_alias?: string;
+  card_alias?: string;
+  eligible?: boolean;
+  [key: string]: unknown;
+}
+
+export interface EligibilityResponse {
+  status?: boolean | string;
+  data?: EligibilityCard[];
+  [key: string]: unknown;
+}
+
+/**
+ * Aliases of the cards the eligibility API marked eligible.
+ *
+ * The response is the only eligibility signal available: the listing endpoint
+ * does not filter by eligibility (see getCardListing), so filtering is done
+ * client-side against these aliases.
+ */
+export const extractEligibleAliases = (response: EligibilityResponse): string[] => {
+  const cards = Array.isArray(response?.data) ? response.data : [];
+  return cards
+    .filter((card) => card?.eligible === true)
+    .map((card) => card?.seo_card_alias || card?.card_alias)
+    .filter((alias): alias is string => Boolean(alias));
+};
 
 export interface SpendingData {
   amazon_spends?: number;
@@ -69,21 +101,23 @@ export const cardService = {
     return data;
   },
 
-  async getCardListing(params: {
-    slug: string;
-    banks_ids: number[];
-    card_networks: string[];
-    annualFees: string;
-    credit_score: string;
-    sort_by: string;
-    free_cards: string;
-    eligiblityPayload: {
-      pincode?: string;
-      inhandIncome?: string;
-      empStatus?: string;
-    };
-    cardGeniusPayload: any[];
-  }, signal?: AbortSignal) {
+  /**
+   * Partner card listing.
+   *
+   * IMPORTANT: this endpoint is called as a GET and only `slug` and `sort_by`
+   * reach the network. It does NOT filter by eligibility, bank, network, fee or
+   * credit score. The previous signature accepted all of those plus an
+   * `eligiblityPayload`, built a query string from two of them, and silently
+   * discarded the rest, so callers were constructing payloads that went
+   * nowhere. The signature is now limited to what is actually sent.
+   *
+   * Consequence for eligibility: filtering happens client-side against the
+   * aliases returned by checkEligibility.
+   */
+  async getCardListing(
+    params: { slug?: string; sort_by?: string },
+    signal?: AbortSignal
+  ) {
     const qs = new URLSearchParams();
     if (params.slug) qs.set('slug', params.slug);
     if (params.sort_by) qs.set('sort_by', params.sort_by);
@@ -108,22 +142,48 @@ export const cardService = {
     return response.json();
   },
 
-  async checkEligibility(params: {
-    cardAlias: string;
-    pincode: string;
-    inhandIncome: string;
-    empStatus: 'salaried' | 'self_employed';
-  }) {
-    const response = await fetch('https://bk-prod-external.bankkaro.com/sp/api/cg-eligiblity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pincode: params.pincode,
-        inhandIncome: params.inhandIncome,
-        empStatus: params.empStatus,
-      }),
-    });
-    return response.json();
+  /**
+   * Eligibility check. THE single call site for the eligibility API.
+   *
+   * `inhandIncome` is MONTHLY rupees. Confirmed by the labels on every form
+   * surface ("In-hand Income (₹ / month)", "Monthly Income (₹)") and by
+   * journeyTrack forwarding it as `monthly_income`. Route monthly values
+   * through toBreIncome() so the unit has one documented home.
+   *
+   * `empStatus` must be the underscore form `self_employed`. The hyphenated
+   * form Credit Links sends would not match and would still return a
+   * plausible-looking card set.
+   *
+   * Not proxied: this is a direct cross-origin POST, matching the existing
+   * behaviour. Moving it behind /api/proxy is a separate change.
+   */
+  async checkEligibility(
+    params: {
+      pincode: string;
+      inhandIncome: number | string;
+      empStatus: EmpStatus;
+    },
+    options: { timeoutMs?: number; signal?: AbortSignal } = {}
+  ): Promise<EligibilityResponse> {
+    const { timeoutMs = 12000 } = options;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(ELIGIBILITY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: options.signal ?? controller.signal,
+        body: JSON.stringify({
+          pincode: params.pincode,
+          inhandIncome: String(params.inhandIncome),
+          empStatus: params.empStatus,
+        }),
+      });
+      return (await response.json()) as EligibilityResponse;
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   /**

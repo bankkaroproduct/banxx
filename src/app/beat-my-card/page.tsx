@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import BeatMyCard from "@/views/BeatMyCard";
 
 export const metadata: Metadata = {
-  robots: 'noindex, follow',
-  alternates: { canonical: 'https://great.cards/beat-my-card' },
+  robots: 'noindex, nofollow',
 };
 
 export default function BeatMyCardPage() {

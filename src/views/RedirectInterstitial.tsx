@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ExternalLink, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { trackApplyRedirect } from '@/services/journeyTrack';
+import { findPlaceholder } from '@/lib/outboundUrl';
 
 // The exit link is now resolved by the redirect handler BEFORE this page opens —
 // the final URL arrives in the `url` param and the exit_id in the `exitId` param.
@@ -54,6 +55,19 @@ export default function RedirectInterstitial() {
         cardName,
         status: 'error'
       }));
+      return;
+    }
+
+    // Placeholder guard. This is the last point before a navigation, and this
+    // route is directly addressable with any ?url=, so it cannot rely on the
+    // redirect handler having checked.
+    const leaked = findPlaceholder(targetUrl);
+    if (leaked) {
+      console.error('[redirect] BLOCKED: interstitial URL contains an unsubstituted placeholder', {
+        placeholder: leaked,
+        url: targetUrl,
+      });
+      setState(prev => ({ ...prev, bankName, bankLogo, cardName, status: 'error' }));
       return;
     }
 
@@ -114,6 +128,20 @@ export default function RedirectInterstitial() {
     // The exit link was already resolved by the redirect handler before this page
     // opened — `url` is the final destination and `exitId` arrives in the query.
     const finalUrl = url;
+
+    // Belt and braces: performRedirect is also reachable from the Continue
+    // button, so re-check immediately before navigating.
+    const leaked = findPlaceholder(finalUrl);
+    if (leaked) {
+      console.error('[redirect] BLOCKED at navigation: unsubstituted placeholder', {
+        placeholder: leaked,
+        url: finalUrl,
+      });
+      hasRedirected.current = false;
+      setState(prev => ({ ...prev, status: 'error' }));
+      return;
+    }
+
     const exitId: string | number | null = searchParams.get('exitId');
 
     // Journey Track: user is being redirected to the bank's application page,
@@ -227,7 +255,7 @@ export default function RedirectInterstitial() {
         {/* Countdown Display */}
         <div className="mb-8">
           <div className="relative w-32 h-32 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full bg-[#E0F7F9] animate-pulse" />
+            <div className="absolute inset-0 rounded-full bg-surface-elevated animate-pulse" />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-5xl font-bold text-primary mb-1" role="timer" aria-live="polite">

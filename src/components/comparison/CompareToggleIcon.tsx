@@ -24,7 +24,7 @@ export function CompareToggleIcon({ card, className }: CompareToggleIconProps) {
         "group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 text-xs font-medium shadow-md hover:shadow-lg",
         selected 
           ? "bg-primary text-primary-foreground" 
-          : "bg-card text-foreground border border-border hover:border-primary hover:bg-[#E0F7F9]",
+          : "bg-card text-foreground border border-border hover:border-primary hover:bg-accent",
         className
       )}
       aria-label={selected ? "Remove from comparison" : "Add to comparison"}

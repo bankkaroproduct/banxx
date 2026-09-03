@@ -12,9 +12,10 @@ import {
   trackNavDiscoverClicked,
   trackNavToolsDropdownOpened,
   trackNavToolSelected,
-  trackNavBlogsClicked,
 } from "@/services/journeyTrack";
 import { brandConfig } from "@/config/brand.config";
+import { BrandWordmark } from "@/components/BrandWordmark";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAutoHideNav } from "@/hooks/useAutoHideNav";
 
 type MobileNavItem = {
@@ -142,33 +143,30 @@ const MobileMenuOverlay = ({
         onClick={handleBackdropClick}
       >
         <div
-          className="relative flex flex-col flex-1 bg-white dark:bg-slate-900 shadow-2xl"
+          className="relative flex flex-col flex-1 bg-card shadow-2xl"
           onClick={handleDialogClick}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-border">
             <div className="flex items-center gap-3 min-w-0">
-              <img src={logoSrc} alt={brandConfig.name} className="h-9 w-9 rounded-full object-cover flex-shrink-0" style={{ border: '2px solid #0B7A8A' }} />
-              <span className="text-sm font-bold truncate" style={{ color: '#0B7A8A' }}>
-                {brandConfig.name}
-              </span>
+              <BrandWordmark widthPx={124} className="flex-shrink-0" />
             </div>
             <button
               ref={firstFocusRef}
-              className="touch-target flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="touch-target flex items-center justify-center rounded-full hover:bg-accent transition-colors"
               onClick={onClose}
               aria-label="Close menu"
             >
-              <X className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+              <X className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white dark:bg-slate-900">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-card">
             {/* Home */}
             <Link
               to="/"
-              className="block rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-5 py-4 text-lg font-bold text-slate-900 dark:text-slate-100 hover:border-[#0B7A8A] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+              className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
               onClick={() => { trackNavHomeClicked('Home'); onClose(); }}
             >
               Home
@@ -177,7 +175,7 @@ const MobileMenuOverlay = ({
             {/* About */}
             <Link
               to="/about"
-              className="block rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-5 py-4 text-lg font-bold text-slate-900 dark:text-slate-100 hover:border-[#0B7A8A] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+              className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
               onClick={() => { trackNavAboutClicked('About'); onClose(); }}
             >
               About
@@ -186,7 +184,7 @@ const MobileMenuOverlay = ({
             {/* Discover */}
             <Link
               to="/cards"
-              className="block rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-5 py-4 text-lg font-bold text-slate-900 dark:text-slate-100 hover:border-[#0B7A8A] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+              className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
               onClick={() => { trackNavDiscoverClicked('Discover'); onClose(); }}
             >
               Discover
@@ -194,7 +192,7 @@ const MobileMenuOverlay = ({
 
             {/* Tools Section */}
             <div className="space-y-3 pt-2">
-              <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400 px-1">
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground px-1">
                 🛠️ Tools
               </p>
               <div className="space-y-2">
@@ -205,14 +203,14 @@ const MobileMenuOverlay = ({
                       <Link
                         key={tool.to}
                         to={tool.to}
-                        className="block rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-5 py-4 hover:border-[#0B7A8A]/80 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                        className="block rounded-2xl border-2 border-border px-5 py-4 hover:border-primary hover:bg-accent transition-all"
                         onClick={onClose}
                       >
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
+                        <div className="font-bold text-foreground">
                           {tool.label}
                         </div>
                         {tool.description && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             {tool.description}
                           </p>
                         )}
@@ -221,19 +219,10 @@ const MobileMenuOverlay = ({
                   )}
               </div>
             </div>
-
-            {/* Blogs */}
-            <Link
-              to="/blogs"
-              className="block rounded-2xl border-2 border-slate-200 dark:border-slate-700 px-5 py-4 text-lg font-bold text-slate-900 dark:text-slate-100 hover:border-[#0B7A8A] hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
-              onClick={() => { trackNavBlogsClicked('Blogs'); onClose(); }}
-            >
-              Blogs
-            </Link>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <p className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <div className="px-6 py-4 border-t border-border bg-card">
+            <p className="text-center text-xs text-muted-foreground font-medium">
               Tap outside or press Esc to close
             </p>
           </div>
@@ -309,18 +298,16 @@ const Navigation = () => {
   ]), [navLinks, toolLinks]);
 
   return <nav
-    className="fixed top-0 left-0 right-0 z-50 backdrop-blur-lg  border-slate-700 overflow-visible will-change-transform"
+    className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg overflow-visible will-change-transform"
     style={{
       ...style,
       '--nav-height': navHeight,
-      backgroundColor: brandConfig.headerBgColor,
     } as React.CSSProperties}
   >
     <div className="container mx-auto px-4 py-1.5 lg:py-2 overflow-visible">
       <div className="flex items-center justify-between gap-4">
         <Link to="/" className="flex items-center gap-2.5" onClick={() => trackNavLogoClicked()}>
-          <img src={brandConfig.logo} alt={brandConfig.name} className="h-9 w-9 rounded-full object-cover flex-shrink-0" style={{ border: '2px solid #0B7A8A' }} />
-          <span className="text-xl font-bold hidden sm:inline" style={{ color: '#0B7A8A' }}>{brandConfig.name}</span>
+          <BrandWordmark widthPx={124} className="flex-shrink-0" />
         </Link>
 
         {/* Desktop Navigation */}
@@ -329,8 +316,8 @@ const Navigation = () => {
             <NavLink
               key={link.label}
               to={link.to!}
-              className="text-foreground hover:text-[#0B7A8A] transition-colors font-medium"
-              activeClassName="text-[#0B7A8A] font-semibold"
+              className="text-foreground hover:text-primary-hover transition-colors font-medium"
+              activeClassName="text-accent-text font-semibold"
               onClick={link.action}
             >
               {link.label}
@@ -362,29 +349,25 @@ const Navigation = () => {
             </div>
           </div>
 
-          <NavLink
-            to="/blogs"
-            className="text-foreground hover:text-[#0B7A8A] transition-colors font-medium"
-            activeClassName="text-[#0B7A8A] font-semibold"
-            onClick={() => trackNavBlogsClicked('Blogs')}
-          >
-            Blogs
-          </NavLink>
 
+        </div>
+
+        <div className="hidden lg:flex items-center">
+          <ThemeToggle />
         </div>
 
         {/* Mobile Actions */}
         <div className="flex items-center gap-2 lg:hidden">
           <button
             ref={menuTriggerRef}
-            className="p-3 rounded-xl bg-[#0B7A8A] hover:bg-[#085F6D] active:bg-[#064D59] transition-all touch-target shadow-lg"
+            className="p-3 rounded-xl bg-primary hover:bg-primary-hover active:bg-primary-hover transition-all touch-target shadow-lg"
             onClick={() => setIsMobileMenuOpen(true)}
             aria-label="Open navigation menu"
           >
             <div className="relative w-6 h-6 flex flex-col items-center justify-center gap-1.5">
-              <span className="block w-6 h-0.5 bg-white rounded-full"></span>
-              <span className="block w-6 h-0.5 bg-white rounded-full"></span>
-              <span className="block w-6 h-0.5 bg-white rounded-full"></span>
+              <span className="block w-6 h-0.5 bg-card rounded-full"></span>
+              <span className="block w-6 h-0.5 bg-card rounded-full"></span>
+              <span className="block w-6 h-0.5 bg-card rounded-full"></span>
             </div>
           </button>
         </div>

@@ -41,7 +41,7 @@ export function ComparePill() {
           isVisible && !isPanelOpen ? "animate-slide-in-right" : "opacity-0 pointer-events-none"
         )}
       >
-        <div className="bg-gradient-to-r from-[#0B7A8A] to-[#E0F7F9] rounded-2xl shadow-2xl px-4 py-3 backdrop-blur-md border border-[#0B7A8A]/25">
+        <div className="bg-gradient-to-r from-primary to-surface-elevated rounded-2xl shadow-2xl px-4 py-3 backdrop-blur-md border border-primary">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs sm:text-sm font-semibold text-primary-foreground flex items-center gap-1.5 sm:gap-2">
@@ -53,7 +53,7 @@ export function ComparePill() {
               size="sm"
               variant="ghost"
               onClick={clearAll}
-              className="h-6 w-6 sm:h-7 sm:w-7 p-0 hover:bg-white/20 text-primary-foreground touch-target"
+              className="h-6 w-6 sm:h-7 sm:w-7 p-0 hover:bg-card/20 text-primary-foreground touch-target"
             >
               <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </Button>
@@ -67,7 +67,7 @@ export function ComparePill() {
                 className="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0"
               >
                 {/* Image container — overflow-hidden is scoped here so it does NOT clip the X button */}
-                <div className="absolute inset-0 rounded-md sm:rounded-lg bg-white border-2 border-white/50 overflow-hidden shadow-md">
+                <div className="absolute inset-0 rounded-md sm:rounded-lg bg-card border-2 border-white/50 overflow-hidden shadow-md">
                   <img
                     src={card.card_bg_image || card.image || '/placeholder.svg'}
                     alt={card.name}
@@ -85,7 +85,7 @@ export function ComparePill() {
                     e.preventDefault();
                     removeCard(getCardKey(card));
                   }}
-                  className="absolute top-0 right-0 z-10 bg-black/70 hover:bg-red-600 text-white rounded-bl-md p-1 leading-none"
+                  className="absolute top-0 right-0 z-10 bg-black/70 hover:bg-red-600 text-primary-foreground rounded-bl-md p-1 leading-none"
                   aria-label={`Remove ${card.name} from comparison`}
                 >
                   <X className="w-3 h-3" />
@@ -98,7 +98,7 @@ export function ComparePill() {
           <Button
             size="sm"
             onClick={() => { trackCompareNowClicked(selectedCards.map(getCardKey)); setIsPanelOpen(true); }}
-            className="mt-1 w-full bg-white hover:bg-white/90 text-primary font-semibold shadow-lg text-xs sm:text-sm h-9 rounded-xl"
+            className="mt-1 w-full bg-card hover:bg-card/90 text-primary font-semibold shadow-lg text-xs sm:text-sm h-9 rounded-xl"
           >
             <ArrowRightLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             <span className="hidden xs:inline">Compare {selectedCards.length} Card{selectedCards.length > 1 ? 's' : ''}</span>

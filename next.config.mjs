@@ -12,6 +12,12 @@ const nextConfig = {
             {
                 source: '/:path*',
                 headers: [
+                    // Full-subdomain noindex. This is a paid affiliate surface
+                    // whose entry URL carries eligibility parameters, and the
+                    // home route now renders results, so there is no page here
+                    // with an SEO case. Also set in robots.txt and in the route
+                    // metadata, deliberately belt-and-braces.
+                    { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
                     { key: 'X-Frame-Options', value: 'DENY' },
                     { key: 'X-Content-Type-Options', value: 'nosniff' },
                     { key: 'X-XSS-Protection', value: '1; mode=block' },

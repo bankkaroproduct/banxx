@@ -4,11 +4,13 @@
  */
 
 import { toast } from 'sonner';
-import { brandConfig } from '@/config/brand.config';
 import { cardService } from '@/services/cardService';
-
-/** Matches any unfilled template placeholder like {click_id} or {user_id} */
-const PLACEHOLDER_RE = /\{[^}]+\}/;
+import { getStoredAttribution } from '@/lib/attribution';
+import {
+  appendAttribution,
+  findPlaceholder,
+  substitutePlaceholders,
+} from '@/lib/outboundUrl';
 
 const ALLOWED_DOMAINS = [
   'track.techtrack.in',
@@ -88,6 +90,15 @@ export const openRedirectInterstitial = async (params: RedirectParams): Promise<
 
   const destinationUrl = normalizedNetworkUrl;
 
+  if (destinationUrl && findPlaceholder(destinationUrl)) {
+    console.error(
+      '[redirect] BLOCKED: catalogue URL contains an unsubstituted placeholder',
+      { placeholder: findPlaceholder(destinationUrl), url: destinationUrl, source: 'catalogue' }
+    );
+    toast.error('This application link is misconfigured. Please try another card.');
+    return null;
+  }
+
   // Track the click event
   trackRedirectClick({
     cardId,
@@ -114,6 +125,29 @@ export const openRedirectInterstitial = async (params: RedirectParams): Promise<
     console.log('[get-link] resolved →', { finalUrl, exitId });
   } catch (err) {
     console.error('[get-link] failed, falling back to original URL:', err);
+  }
+
+  // Attribution is appended AFTER get-link resolves, because get-link returns
+  // the URL the user is actually sent to. Append-only and string-level: some
+  // bank URLs are signed, so re-encoding or reordering the existing query can
+  // invalidate them.
+  const attribution = getStoredAttribution();
+  finalUrl = appendAttribution(finalUrl, { p2: attribution.p2, p3: attribution.p3 });
+
+  // The guard that was missing. finalUrl comes back from get-link and used to
+  // go straight into the interstitial and then window.location.replace()
+  // without ever being re-checked, which is how live {click_id} placeholders
+  // reached production. Fail loudly instead: a blocked redirect with an error
+  // is recoverable, a redirect to a broken tracking URL loses the conversion
+  // and the attribution silently.
+  const leaked = findPlaceholder(finalUrl);
+  if (leaked) {
+    console.error(
+      '[redirect] BLOCKED: outbound URL contains an unsubstituted placeholder',
+      { placeholder: leaked, url: finalUrl, source: 'get-link' }
+    );
+    toast.error('This application link is misconfigured. Please try another card.');
+    return null;
   }
 
   // Build query parameters for the interstitial page (url is now already resolved)
@@ -238,30 +272,26 @@ export const isAllowedDomain = (url: string): boolean => {
   }
 };
 
-const cleanUrl = (rawUrl: string): string => {
-  try {
-    // Get partner name from brand config
-    const partnerName = brandConfig.name?.toLowerCase() || 'bankkaro';
-
-    // Replace known placeholders with actual values
-    let url = rawUrl.trim()
-      .replace('{user_id}', partnerName)  // e.g. 'tide'
-      .replace('{click_id}', '');         // leave empty
-
-    // Remove any remaining unfilled placeholders
-    const parsed = new URL(url);
-    const params = new URLSearchParams();
-    parsed.searchParams.forEach((value, key) => {
-      if (!value.includes('{') && !value.includes('}')) {
-        params.append(key, value);
-      }
-    });
-    parsed.search = params.toString();
-    return parsed.toString();
-  } catch {
-    return rawUrl.trim();
-  }
-};
+/**
+ * Substitute the placeholders we have values for and drop the rest.
+ *
+ * Replaces the previous implementation, which had five defects:
+ *   1. `.replace('{user_id}', ...)` was a string replace, so a second
+ *      occurrence survived.
+ *   2. `{click_id}` was replaced with an empty string, emitting `click_id=`.
+ *      The strip loop then kept it, because "" contains no braces.
+ *   3. The strip loop inspected only param VALUES, so a placeholder in the path
+ *      or in a param key survived.
+ *   4. The whole function was wrapped in a try/catch returning the raw URL on
+ *      parse failure, and an unsubstituted `{...}` can make `new URL()` throw,
+ *      so the failure path returned the URL with every placeholder intact.
+ *   5. It substituted the partner's BRAND NAME into `{user_id}`, putting a
+ *      partner name into a per-user field for every user.
+ *
+ * `{user_id}` now receives p2, the actual Credit Links user id.
+ */
+const cleanUrl = (rawUrl: string): string =>
+  substitutePlaceholders(rawUrl.trim(), { p2: getStoredAttribution().p2 });
 
 /**
  * Convenience helper to open card application flows from raw card objects

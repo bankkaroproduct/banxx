@@ -28,7 +28,18 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, X, ArrowUpDown, CheckCircle2, Sparkles, ShoppingBag, Utensils, Fuel, Plane, Coffee, ShoppingCart, CreditCard } from "lucide-react";
-import { cardService, SpendingData } from "@/services/cardService";
+import { cardService, extractEligibleAliases, SpendingData } from "@/services/cardService";
+import { EligibilityChips, type EligibilityBasis } from "@/components/EligibilityChips";
+import { hydrateAndLog, type HydrationResult, type EligibilityField } from "@/lib/hydration";
+import { persistAttribution } from "@/lib/attribution";
+import { saveEligibility } from "@/lib/eligibilityStore";
+import {
+  EMP_STATUS_OPTIONS,
+  isValidPincode,
+  normalizeMonthlySalary,
+  toBreIncome,
+  type EmpStatus,
+} from "@/lib/eligibilityParams";
 import { Badge } from "@/components/ui/badge";
 import GeniusDialog from "@/components/GeniusDialog";
 import { CompareToggleIcon } from "@/components/comparison/CompareToggleIcon";
@@ -92,6 +103,23 @@ const getCardNetworks = (card: any): string => {
   return CARD_NETWORK_CORRECTIONS[name] ?? (card.card_type || '');
 };
 
+/**
+ * DOM ids for the eligibility inputs, used to focus the first field a partner
+ * link failed to resolve.
+ *
+ * The listing renders the eligibility form twice, a mobile collapsible and a
+ * desktop bar, and both are mounted at once. Duplicate ids would be invalid
+ * HTML, so the mobile instance carries a "-m" suffix and the focus helper picks
+ * the instance that is actually visible.
+ */
+const FIELD_INPUT_IDS: Record<EligibilityField, string> = {
+  inhandIncome: 'elig-income',
+  pincode: 'elig-pincode',
+  empStatus: 'elig-emp-status',
+};
+
+const MOBILE_ID_SUFFIX = '-m';
+
 const VALID_CATEGORIES = ['all', 'fuel', 'shopping', 'online-food', 'dining', 'grocery', 'travel', 'utility'];
 const normalizeCategory = (value: string | null) => {
   if (!value) return 'all';
@@ -153,12 +181,26 @@ const CardListing = () => {
     'utility': 'best-utility-credit-card'
   };
 
-  // Eligibility payload
-  const [eligibility, setEligibility] = useState({
+  /**
+   * Eligibility form state.
+   *
+   * empStatus starts EMPTY, not "salaried". The previous default meant an
+   * unresolved employment type was indistinguishable from a user who actually
+   * selected "Salaried", which is exactly the silent-default failure that
+   * produces a wrong card set looking like a correct one.
+   */
+  const [eligibility, setEligibility] = useState<{
+    pincode: string;
+    inhandIncome: string;
+    empStatus: EmpStatus | "";
+  }>({
     pincode: "",
     inhandIncome: "",
-    empStatus: "salaried"
+    empStatus: ""
   });
+  const [hydration, setHydration] = useState<HydrationResult | null>(null);
+  const [isRecheckingEligibility, setIsRecheckingEligibility] = useState(false);
+  const hydratedOnce = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   useEffect(() => {
     fetchCards();
@@ -213,31 +255,17 @@ const CardListing = () => {
     try {
       setLoading(true);
 
-      // Build base payload with active filters
-      const baseParams: any = {
-        slug: categoryToSlug[filters.category] ?? '',
-        banks_ids: filters.banks_ids || [],
-        card_networks: filters.card_networks || [],
-        annualFees: filters.annualFees === "free" ? "" : filters.annualFees || "",
-        credit_score: filters.credit_score || "",
-        sort_by: filters.sort_by || "priority",
-        free_cards: filters.annualFees === "free" ? "true" : "",
-        cardGeniusPayload: []
-      };
-
-      // Handle eligiblityPayload based on user input
-      if (eligibilitySubmitted && eligibility.pincode && eligibility.inhandIncome && eligibility.empStatus) {
-        // User filled all fields - send actual values
-        baseParams.eligiblityPayload = {
-          pincode: eligibility.pincode,
-          inhandIncome: eligibility.inhandIncome,
-          empStatus: eligibility.empStatus
-        };
-      } else {
-        // First load or no eligibility - send empty object
-        baseParams.eligiblityPayload = {};
-      }
-      const response = await cardService.getCardListing(baseParams, controller.signal);
+      // Only slug and sort_by reach the network — this endpoint does not filter
+      // by eligibility, bank, network or fee. Eligibility is applied
+      // client-side in filteredCards, against the aliases from
+      // checkEligibility. Filters are likewise applied client-side below.
+      const response = await cardService.getCardListing(
+        {
+          slug: categoryToSlug[filters.category] ?? '',
+          sort_by: filters.sort_by || "priority",
+        },
+        controller.signal
+      );
       let incomingCards: any[] = [];
       if (response.status === 'success' && response.data && Array.isArray(response.data.cards)) {
         incomingCards = response.data.cards;
@@ -502,88 +530,204 @@ const CardListing = () => {
     // Trigger API call without eligibility
     fetchCards();
   };
-  const handleEligibilitySubmit = async () => {
-    trackEligibilityCheckClicked();
-    // Validate inputs
-    if (!eligibility.pincode || eligibility.pincode.length !== 6) {
-      toast.error("Please enter a valid 6-digit pincode");
-      return;
-    }
-    if (!eligibility.inhandIncome || parseInt(eligibility.inhandIncome) < 1000) {
-      toast.error("Please enter a valid monthly income");
-      return;
-    }
-    trackEligibilityDetailsFilled(eligibility.pincode, eligibility.inhandIncome, eligibility.empStatus);
+  /**
+   * Run the eligibility check and apply the result.
+   *
+   * The one path used by the manual form, URL hydration and chip edits, so all
+   * three produce identical wire payloads. Filtering is client-side: the
+   * listing endpoint has no eligibility-filtered variant, so this is one POST
+   * plus a re-filter, never a fresh listing fetch.
+   */
+  const runEligibility = async (
+    basis: { pincode: string; inhandIncome: number; empStatus: EmpStatus },
+    options: { announce?: boolean } = {}
+  ): Promise<boolean> => {
+    const { announce = true } = options;
+    setIsRecheckingEligibility(true);
+
     try {
-      // Call dedicated eligibility API to determine which cards are eligible
-      const eligibilityPayload = {
-        pincode: eligibility.pincode,
-        inhandIncome: eligibility.inhandIncome,
-        empStatus: eligibility.empStatus
-      };
-      const response = await fetch('https://bk-prod-external.bankkaro.com/sp/api/cg-eligiblity', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(eligibilityPayload)
+      const response = await cardService.checkEligibility({
+        pincode: basis.pincode,
+        // toBreIncome documents the unit: the API takes MONTHLY rupees, so this
+        // is intentionally an identity mapping and must stay one.
+        inhandIncome: toBreIncome(basis.inhandIncome),
+        empStatus: basis.empStatus,
       });
 
-      const data = await response.json();
+      const aliases = extractEligibleAliases(response);
 
-      if (data?.status && Array.isArray(data.data)) {
-        const eligibleCards = data.data.filter((card: any) => card.eligible === true);
-        const aliases = eligibleCards
-          .map((card: any) => card.seo_card_alias || card.card_alias)
-          .filter(Boolean);
+      setEligibleCardAliases(aliases);
+      setEligibilitySubmitted(true);
+      setEligibilityOpen(false);
+      saveEligibility({
+        pincode: basis.pincode,
+        inhandIncome: basis.inhandIncome,
+        empStatus: basis.empStatus,
+      });
 
-        setEligibleCardAliases(aliases);
-        setEligibilitySubmitted(true);
-        setEligibilityOpen(false);
-        trackEligibilityChecked(eligibility.pincode, eligibility.inhandIncome, eligibility.empStatus, aliases.length);
+      trackEligibilityChecked(
+        basis.pincode,
+        String(basis.inhandIncome),
+        basis.empStatus,
+        aliases.length
+      );
 
-        // Refetch cards with eligibility criteria and other filters
-        await fetchCards();
-
-        if (aliases.length > 0) {
-          // Compute counts from the listing page's own card array (same source as page header)
-          // so the toast and header always agree. The eligibility API may have a different
-          // card inventory than what's actually shown on this page.
-          const aliasSet = new Set(aliases);
-          const totalInPage = (cards || []).length;
-          const eligibleInPage = (cards || []).filter((card: any) => {
-            const alias = getCardAlias(card) || card.seo_card_alias || card.card_alias;
-            return alias && aliasSet.has(String(alias));
-          }).length;
-          const ineligibleInPage = totalInPage - eligibleInPage;
-
-          toast.success("Eligibility criteria applied!", {
-            description: `${ineligibleInPage} cards filtered out. Showing ${eligibleInPage} eligible cards.`
-          });
-          confetti({
-            particleCount: 60,
-            spread: 50,
-            origin: {
-              y: 0.6
-            }
-          });
-        } else {
-          toast.error("No Eligible Cards", {
-            description: "No cards match your eligibility criteria"
-          });
-        }
-      } else {
+      if (aliases.length === 0) {
         toast.error("No Eligible Cards", {
           description: "No cards match your eligibility criteria"
         });
+        return false;
       }
-      setEligibilitySubmitted(true); // Ensure submitted is set
+
+      if (announce) {
+        const aliasSet = new Set(aliases);
+        const totalInPage = (cards || []).length;
+        const eligibleInPage = (cards || []).filter((card: any) => {
+          const alias = getCardAlias(card) || card.seo_card_alias || card.card_alias;
+          return alias && aliasSet.has(String(alias));
+        }).length;
+        const ineligibleInPage = totalInPage - eligibleInPage;
+
+        toast.success("Eligibility criteria applied!", {
+          description: `${ineligibleInPage} cards filtered out. Showing ${eligibleInPage} eligible cards.`
+        });
+        confetti({ particleCount: 60, spread: 50, origin: { y: 0.6 } });
+      }
+
       analytics.trackEvent({ category: 'Engagement', action: 'Check Eligibility', label: 'Listing Page Success' });
-    } catch (error) {
-      console.error('Eligibility check error:', error);
-      toast.error("We couldn't check eligibility right now. Please try again.");
+      return true;
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        toast.error("Eligibility check timed out. Please try again.");
+      } else {
+        console.error('Eligibility check error:', error);
+        toast.error("We couldn't check eligibility right now. Please try again.");
+      }
+      return false;
+    } finally {
+      setIsRecheckingEligibility(false);
     }
   };
+
+  const handleEligibilitySubmit = async () => {
+    trackEligibilityCheckClicked();
+
+    // Shared validators, identical to the ones the URL adapter uses.
+    if (!isValidPincode(eligibility.pincode)) {
+      toast.error("Please enter a valid 6-digit pincode");
+      return;
+    }
+    const monthly = normalizeMonthlySalary(eligibility.inhandIncome);
+    if (!monthly.ok) {
+      toast.error("Please enter a valid monthly income");
+      return;
+    }
+    if (!eligibility.empStatus) {
+      toast.error("Please select your employment status");
+      return;
+    }
+
+    trackEligibilityDetailsFilled(eligibility.pincode, String(monthly.value), eligibility.empStatus);
+    await runEligibility({
+      pincode: eligibility.pincode,
+      inhandIncome: monthly.value,
+      empStatus: eligibility.empStatus,
+    });
+  };
+
+  /**
+   * URL hydration for arrivals from Credit Links.
+   *
+   * Runs once. When all three of sal/pin/st resolve, the form is skipped and
+   * the user lands straight on filtered results. When any one fails, the form
+   * renders prefilled with whatever did resolve and focus goes to the first
+   * unresolved field. A failed param is never defaulted.
+   */
+  useEffect(() => {
+    if (hydratedOnce.current) return;
+    hydratedOnce.current = true;
+
+    const result = hydrateAndLog(searchParams);
+    setHydration(result);
+    // Attribution is stored regardless of whether eligibility resolved: p2/p3
+    // must reach the outbound apply URL even for a user who fills the form.
+    persistAttribution(result.attribution);
+
+    const { pincode, inhandIncome, empStatus } = result.eligibility;
+    if (pincode || inhandIncome || empStatus) {
+      setEligibility({
+        pincode: pincode ?? "",
+        inhandIncome: inhandIncome ? String(inhandIncome) : "",
+        empStatus: empStatus ?? "",
+      });
+    }
+
+    if (result.resolved) {
+      // announce:false — a hydrated user never asked for this, so the toast and
+      // confetti would be an unexplained interruption on first paint.
+      void runEligibility(
+        { pincode: pincode!, inhandIncome: inhandIncome!, empStatus: empStatus! },
+        { announce: false }
+      );
+    } else if (result.attempted) {
+      // Open the mobile collapsible so the prefilled form is visible without a tap.
+      setEligibilityOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  /** Focus the first field the partner link failed to resolve. */
+  useEffect(() => {
+    const field = hydration?.firstUnresolvedField;
+    if (!field || hydration?.resolved || !hydration?.attempted) return;
+
+    const baseId = FIELD_INPUT_IDS[field];
+    const timer = setTimeout(() => {
+      const preferMobile = window.innerWidth < 992;
+      const candidates = preferMobile
+        ? [baseId + MOBILE_ID_SUFFIX, baseId]
+        : [baseId, baseId + MOBILE_ID_SUFFIX];
+      for (const id of candidates) {
+        const target = document.getElementById(id) as HTMLElement | null;
+        if (target && target.offsetParent !== null) {
+          target.focus();
+          target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [hydration]);
+
+  /** Chip edit: re-run eligibility on the edited basis. */
+  const handleBasisChange = async (next: EligibilityBasis) => {
+    if (!next.pincode || !next.inhandIncome || !next.empStatus) return;
+
+    setEligibility({
+      pincode: next.pincode,
+      inhandIncome: String(next.inhandIncome),
+      empStatus: next.empStatus,
+    });
+
+    await runEligibility({
+      pincode: next.pincode,
+      inhandIncome: next.inhandIncome,
+      empStatus: next.empStatus,
+    });
+  };
+
+  const eligibilityBasis: EligibilityBasis = useMemo(() => {
+    const monthly = normalizeMonthlySalary(eligibility.inhandIncome);
+    return {
+      pincode: eligibility.pincode || undefined,
+      inhandIncome: monthly.ok ? monthly.value : undefined,
+      empStatus: eligibility.empStatus || undefined,
+    };
+  }, [eligibility]);
+
+  /** True when the user arrived with a complete, valid eligibility basis. */
+  const skipForm = Boolean(hydration?.resolved);
+
   const handleGeniusSubmit = async (spendingData: SpendingData) => {
     analytics.trackGeniusStart('Listing Genius - ' + filters.category);
     try {
@@ -719,7 +863,7 @@ const CardListing = () => {
           label: 'Travel',
           icon: Plane
         }].map(cat => <label key={cat.id} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
-          <input type="radio" name="category" className="accent-[#0B7A8A] w-5 h-5" checked={filters.category === cat.id} onChange={() => handleFilterChange('category', cat.id)} />
+          <input type="radio" name="category" className="accent-primary w-5 h-5" checked={filters.category === cat.id} onChange={() => handleFilterChange('category', cat.id)} />
           <cat.icon className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm flex-1">{cat.label}</span>
         </label>)}
@@ -752,7 +896,7 @@ const CardListing = () => {
           label: '₹5,001+',
           value: '5001+'
         }].map(fee => <label key={fee.value} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
-          <input type="radio" name="annualFee" className="accent-[#0B7A8A] w-5 h-5" checked={filters.annualFees === fee.value} onChange={() => handleFilterChange('annualFees', fee.value)} />
+          <input type="radio" name="annualFee" className="accent-primary w-5 h-5" checked={filters.annualFees === fee.value} onChange={() => handleFilterChange('annualFees', fee.value)} />
           <span className="text-sm">{fee.label}</span>
         </label>)}
       </CollapsibleContent>
@@ -776,7 +920,7 @@ const CardListing = () => {
               <input 
                 type="radio" 
                 name="creditScore" 
-                className="accent-[#0B7A8A]"
+                className="accent-primary"
                 checked={filters.credit_score === score.value}
                 onChange={() => handleFilterChange('credit_score', score.value)}
               />
@@ -794,7 +938,7 @@ const CardListing = () => {
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-2 space-y-2 pl-1">
         {['VISA', 'Mastercard', 'RuPay', 'AmericanExpress'].map(network => <label key={network} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
-          <input type="checkbox" className="accent-[#0B7A8A] w-5 h-5" checked={filters.card_networks.includes(network)} onChange={e => {
+          <input type="checkbox" className="accent-primary w-5 h-5" checked={filters.card_networks.includes(network)} onChange={e => {
             if (e.target.checked) {
               trackFilterNetworkSelected(network);
               trackListingFiltersSelected('network', network);
@@ -814,7 +958,7 @@ const CardListing = () => {
     <Navigation />
 
     {/* Hero Search */}
-    <section ref={heroRef} className="hero-card-listing pt-24 sm:pt-28 pb-8 sm:pb-12 bg-gradient-to-b from-white to-[#E0F7F9]">
+    <section ref={heroRef} className="hero-card-listing pt-24 sm:pt-28 pb-8 sm:pb-12 bg-gradient-to-b from-background to-surface-elevated">
       <div className="section-shell">
         {/* Mobile & Desktop unified layout */}
         <div className="max-w-3xl mx-auto text-center mb-6 sm:mb-8 space-y-2 sm:space-y-3 px-4 hero-card-listing-header">
@@ -879,14 +1023,26 @@ const CardListing = () => {
           {/* Card Grid */}
           <div className="flex-1 flex flex-col overflow-visible">
             {/* Eligibility Section - Collapsible on Mobile, Always Visible on Desktop */}
+            {/*
+              A fully-resolved partner link skips the form entirely. Anything
+              less renders it prefilled, so the form is never bypassed without
+              a complete, valid eligibility basis.
+            */}
+            {skipForm ? (
+              <EligibilityChips
+                basis={eligibilityBasis}
+                onChange={handleBasisChange}
+                isUpdating={isRecheckingEligibility}
+              />
+            ) : (
             <div ref={eligibilityRef} className="mb-4 sm:mb-6">
               {/* Mobile: Collapsible */}
               <div className="lg:hidden">
                 <Collapsible open={eligibilityOpen} onOpenChange={setEligibilityOpen}>
-                  <div className="bg-[#E0F7F9] dark:bg-[#0B7A8A]/20 rounded-xl border border-[#0B7A8A]/60 dark:border-[#0B7A8A]/30 overflow-hidden">
-                    <CollapsibleTrigger className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-[#E0F7F9]/50 dark:hover:bg-[#0B7A8A]/30 transition-colors touch-target">
+                  <div className="bg-surface-elevated rounded-xl border border-border overflow-hidden">
+                    <CollapsibleTrigger className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-accent transition-colors touch-target">
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B7A8A] dark:text-[#0B7A8A] flex-shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-accent-text flex-shrink-0" />
                         <div className="text-left">
                           <h3 className="font-semibold text-xs sm:text-sm text-foreground">Check Eligibility</h3>
                           <p className="text-[10px] sm:text-xs text-muted-foreground">Quick 3-field check</p>
@@ -900,6 +1056,7 @@ const CardListing = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 items-end">
                           <div>
                             <Input
+                              id={FIELD_INPUT_IDS.pincode + MOBILE_ID_SUFFIX}
                               type="text"
                               inputMode="numeric"
                               placeholder="Pincode"
@@ -909,11 +1066,12 @@ const CardListing = () => {
                                 ...prev,
                                 pincode: e.target.value.replace(/\D/g, '')
                               }))}
-                              className="h-11 text-sm rounded-lg bg-white dark:bg-background"
+                              className="h-11 text-sm rounded-lg bg-background"
                             />
                           </div>
                           <div>
                             <Input
+                              id={FIELD_INPUT_IDS.inhandIncome + MOBILE_ID_SUFFIX}
                               type="number"
                               placeholder="Monthly Income"
                               value={eligibility.inhandIncome}
@@ -921,27 +1079,28 @@ const CardListing = () => {
                                 ...prev,
                                 inhandIncome: e.target.value
                               }))}
-                              className="h-11 text-sm rounded-lg bg-white dark:bg-background"
+                              className="h-11 text-sm rounded-lg bg-background"
                             />
                           </div>
                           <div>
                             <Select value={eligibility.empStatus} onValueChange={value => setEligibility(prev => ({
                               ...prev,
-                              empStatus: value
+                              empStatus: value as EmpStatus
                             }))}>
-                              <SelectTrigger className="h-11 text-sm rounded-lg bg-white dark:bg-background">
+                              <SelectTrigger id={FIELD_INPUT_IDS.empStatus + MOBILE_ID_SUFFIX} className="h-11 text-sm rounded-lg bg-background">
                                 <SelectValue placeholder="Employment" />
                               </SelectTrigger>
                               <SelectContent className="bg-card z-50">
-                                <SelectItem value="salaried">Salaried</SelectItem>
-                                <SelectItem value="self_employed">Self-Employed</SelectItem>
+                                {EMP_STATUS_OPTIONS.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <Button
                             onClick={handleEligibilitySubmit}
                             size="lg"
-                            className="h-11 gap-2 w-full bg-[#0B7A8A] hover:bg-[#0B7A8A]"
+                            className="h-11 gap-2 w-full bg-primary hover:bg-primary-hover"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             <span className="text-sm font-semibold">{eligibilitySubmitted ? "Applied" : "Check"}</span>
@@ -959,6 +1118,7 @@ const CardListing = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Pincode</label>
                     <Input
+                      id={FIELD_INPUT_IDS.pincode}
                       type="text"
                       inputMode="numeric"
                       placeholder="Enter 6-digit pincode"
@@ -974,6 +1134,7 @@ const CardListing = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Monthly Income (₹)</label>
                     <Input
+                      id={FIELD_INPUT_IDS.inhandIncome}
                       type="number"
                       placeholder="e.g., 50000"
                       value={eligibility.inhandIncome}
@@ -988,14 +1149,15 @@ const CardListing = () => {
                     <label className="text-sm font-medium">Employment Status</label>
                     <Select value={eligibility.empStatus} onValueChange={value => setEligibility(prev => ({
                       ...prev,
-                      empStatus: value
+                      empStatus: value as EmpStatus
                     }))}>
-                      <SelectTrigger className="h-12">
+                      <SelectTrigger id={FIELD_INPUT_IDS.empStatus} className="h-12">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-card z-50">
-                        <SelectItem value="salaried">Salaried</SelectItem>
-                        <SelectItem value="self_employed">Self-Employed</SelectItem>
+                        {EMP_STATUS_OPTIONS.map(option => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1011,7 +1173,19 @@ const CardListing = () => {
                 </div>
               </div>
             </div>
+            )}
 
+            {/*
+              Chips also show after a manual submit, so a user who filled the
+              form can see and edit the basis their results are built on.
+            */}
+            {!skipForm && eligibilitySubmitted && (
+              <EligibilityChips
+                basis={eligibilityBasis}
+                onChange={handleBasisChange}
+                isUpdating={isRecheckingEligibility}
+              />
+            )}
 
             {/* AI Card Genius Promo - Desktop Only */}
             {filters.category !== 'all' && (() => {
@@ -1025,10 +1199,10 @@ const CardListing = () => {
                 'utility': 'Utility'
               };
               const categoryName = categoryLabels[filters.category] || 'Category';
-              return <div className="hidden lg:block mb-4 bg-[#E0F7F9]/40 dark:bg-[#0B7A8A]/10 border border-[#0B7A8A]/60 dark:border-[#0B7A8A]/30 rounded-xl p-3">
+              return <div className="hidden lg:block mb-4 bg-surface-elevated border border-border rounded-xl p-3">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 flex-1">
-                    <Sparkles className="h-4 w-4 text-[#0B7A8A] dark:text-[#0B7A8A] flex-shrink-0" />
+                    <Sparkles className="h-4 w-4 text-accent-text flex-shrink-0" />
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">
                         Pro Tip: Try our AI Card Genius
@@ -1038,7 +1212,7 @@ const CardListing = () => {
                       </p>
                     </div>
                   </div>
-                  <Button onClick={() => setShowGeniusDialog(true)} size="sm" className="whitespace-nowrap bg-[#0B7A8A] hover:bg-[#0B7A8A] text-white h-9 px-4">
+                  <Button onClick={() => setShowGeniusDialog(true)} size="sm" className="whitespace-nowrap bg-primary hover:bg-primary-hover text-primary-foreground h-9 px-4">
                     Enter My Spends
                   </Button>
                 </div>
@@ -1061,7 +1235,7 @@ const CardListing = () => {
                 {(filters.category !== 'all' || filters.card_networks.length > 0 || filters.annualFees || eligibilitySubmitted) && (
                   <button
                     onClick={clearFilters}
-                    className="text-xs text-[#0B7A8A] hover:text-[#085F6D] font-semibold"
+                    className="text-xs text-accent-text hover:text-primary-hover font-semibold"
                   >
                     Clear all
                   </button>
@@ -1149,7 +1323,7 @@ const CardListing = () => {
                 Credit Score: {filters.credit_score}
                 <X className="w-3 h-3 cursor-pointer" onClick={() => handleFilterChange('credit_score', '')} />
               </Badge>}
-              {eligibilitySubmitted && <Badge variant="secondary" className="gap-2 bg-[#E0F7F9] dark:bg-[#0B7A8A] text-[#0B7A8A] dark:text-[#0B7A8A] border-[#0B7A8A] dark:border-[#0B7A8A]">
+              {eligibilitySubmitted && <Badge variant="secondary" className="gap-2 bg-surface-elevated text-accent-text border-border">
                 <CheckCircle2 className="w-3 h-3" />
                 Eligibility Applied
                 <X className="w-3 h-3 cursor-pointer" onClick={async () => {
@@ -1163,7 +1337,7 @@ const CardListing = () => {
                   toast.success("Eligibility filter removed");
                 }} />
               </Badge>}
-              {geniusSpendingData && <Badge variant="secondary" className="gap-2 bg-[#E0F7F9] dark:bg-[#0B7A8A]/30 text-[#0B7A8A] dark:text-[#E0F7F9] border-[#E0F7F9] dark:border-[#0B7A8A]">
+              {geniusSpendingData && <Badge variant="secondary" className="gap-2 bg-surface-elevated text-accent-text border-border">
                 <Sparkles className="w-3 h-3" />
                 Category Genius Applied
                 <X className="w-3 h-3 cursor-pointer" onClick={() => {
@@ -1187,7 +1361,7 @@ const CardListing = () => {
               </div> : <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 pb-6">
                   {filteredCards.slice(0, displayCount).map((card, index) => <div key={card.id || index} onClick={() => trackCardClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, card.name, card.banks?.name, index)} className="card-item bg-card rounded-xl sm:rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-[1.02] lg:hover:-translate-y-2 flex flex-col h-full active:scale-[0.98]">
-                    <div className="card-image-container relative h-40 sm:h-44 md:h-48 bg-gradient-to-br from-[#E0F7F9] to-[#f0f9ff] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="card-image-container relative h-40 sm:h-44 md:h-48 bg-gradient-to-br from-surface-elevated to-surface-elevated flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {/* Compare Toggle Icon - Top Right */}
                       <div className="absolute top-3 right-3 z-20">
                         <CompareToggleIcon card={card} />
@@ -1199,12 +1373,12 @@ const CardListing = () => {
                         const cardKey = getCardKey(card);
                         const saving = categorySavings[String(card.id)] ?? categorySavings[cardKey] ?? 0;
                         if (saving === 0) {
-                          return <div className="absolute top-3 left-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-sm font-bold z-10">
+                          return <div className="absolute top-3 left-3 bg-gradient-to-r from-gray-500 to-gray-600 text-primary-foreground px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-sm font-bold z-10">
                             <Sparkles className="w-4 h-4" />
                             ₹0 Savings/yr
                           </div>;
                         }
-                        return <div className="absolute top-3 left-3 bg-[#0B7A8A] text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-sm font-bold z-10">
+                        return <div className="absolute top-3 left-3 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-sm font-bold z-10">
                           <Sparkles className="w-4 h-4" />
                           Save ₹{saving.toLocaleString()}/yr
                         </div>;
@@ -1220,7 +1394,7 @@ const CardListing = () => {
                         const alias = getCardAlias(card) || card.seo_card_alias || card.card_alias;
                         return alias && eligibleCardAliases.includes(String(alias));
                       })() && (
-                          <Badge className="absolute bottom-3 right-3 bg-[#0B7A8A] gap-1 z-10">
+                          <Badge className="absolute bottom-3 right-3 bg-primary gap-1 z-10">
                             <CheckCircle2 className="w-3 h-3" />
                             Eligible
                           </Badge>
@@ -1231,16 +1405,16 @@ const CardListing = () => {
                         const status = getCardStatus(card);
                         if (status === 'discontinued') {
                           return (
-                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-[#1A3B38] text-[#BDE6E2] shadow-md border border-[#0B7A8A]/40 backdrop-blur-sm">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#BDE6E2] inline-block" />
+                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-primary text-primary-foreground shadow-md border border-primary backdrop-blur-sm">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary-glow inline-block" />
                               Discontinued
                             </span>
                           );
                         }
                         if (status === 'invite_only') {
                           return (
-                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-[#0B7A8A] text-white shadow-md backdrop-blur-sm">
-                              <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
+                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-primary text-primary-foreground shadow-md backdrop-blur-sm">
+                              <span className="w-1.5 h-1.5 rounded-full bg-card inline-block" />
                               Invite Only
                             </span>
                           );
@@ -1250,7 +1424,7 @@ const CardListing = () => {
                           const cardKey = getCardKey(card);
                           const saving = categorySavings[String(card.id)] ?? categorySavings[cardKey];
                           return !saving && (
-                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-[#E0F7F9] text-[#0B7A8A] shadow-md">
+                            <span className="absolute bottom-3 right-3 z-10 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide bg-surface-elevated text-accent-text shadow-md">
                               LTF
                             </span>
                           );
@@ -1292,7 +1466,7 @@ const CardListing = () => {
                           <p className="text-[11px] text-muted-foreground mb-1">Joining</p>
                           <p className="font-semibold">{feeCalc(card.joining_fee_text).display}</p>
                           {feeCalc(card.joining_fee_text).tooltip && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                               {feeCalc(card.joining_fee_text).tooltip}
                             </div>
                           )}
@@ -1301,7 +1475,7 @@ const CardListing = () => {
                           <p className="text-[11px] text-muted-foreground mb-1">Annual</p>
                           <p className="font-semibold">{feeCalc(card.annual_fee_text).display}</p>
                           {feeCalc(card.annual_fee_text).tooltip && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                               {feeCalc(card.annual_fee_text).tooltip}
                             </div>
                           )}
@@ -1355,10 +1529,10 @@ const CardListing = () => {
 
     {/* Sticky Eligibility Bar (Top) - Shows on scroll */}
     {showStickyEligibility && !eligibilitySubmitted && (
-      <div className="lg:hidden fixed top-14 left-0 right-0 z-40 bg-white dark:bg-background border-b border-border shadow-md animate-in slide-in-from-top duration-300">
+      <div className="lg:hidden fixed top-14 left-0 right-0 z-40 bg-card border-b border-border shadow-md animate-in slide-in-from-top duration-300">
         <div className="px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[#0B7A8A]" />
+            <CheckCircle2 className="w-4 h-4 text-accent-text" />
             <span className="text-xs font-semibold">Check Eligibility</span>
           </div>
           <Button
@@ -1367,7 +1541,7 @@ const CardListing = () => {
               setEligibilityOpen(true);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="h-8 text-xs font-bold bg-[#0B7A8A] hover:bg-[#0B7A8A]"
+            className="h-8 text-xs font-bold bg-primary hover:bg-primary-hover"
           >
             Quick Check
           </Button>
@@ -1379,7 +1553,7 @@ const CardListing = () => {
     {filters.category !== 'all' && !showGeniusDialog && (
       <button
         onClick={() => setShowGeniusDialog(true)}
-        className="lg:hidden fixed bottom-20 right-4 z-50 bg-[#0B7A8A] hover:bg-[#085F6D] text-white rounded-full shadow-2xl hover:shadow-[#0B7A8A]/50 p-3 sm:p-4 flex items-center gap-2 animate-in zoom-in duration-300 touch-target group active:scale-95 transition-all"
+        className="lg:hidden fixed bottom-20 right-4 z-50 bg-primary hover:bg-primary-hover text-primary-foreground rounded-full shadow-2xl hover:shadow-glow p-3 sm:p-4 flex items-center gap-2 animate-in zoom-in duration-300 touch-target group active:scale-95 transition-all"
         style={{ bottom: showStickyFilter ? '80px' : '20px' }}
       >
         <div className="relative">
@@ -1402,7 +1576,7 @@ const CardListing = () => {
             <Filter className="w-4 h-4" />
             <span>Filters</span>
             {(filters.category !== 'all' || filters.card_networks.length > 0 || filters.annualFees || eligibilitySubmitted) && (
-              <span className="ml-1 px-2 py-0.5 bg-[#E0F7F9] text-black text-[10px] rounded-full font-bold">
+              <span className="ml-1 px-2 py-0.5 bg-surface-elevated text-foreground text-[10px] rounded-full font-bold">
                 {[filters.category !== 'all', filters.card_networks.length > 0, filters.annualFees, eligibilitySubmitted].filter(Boolean).length}
               </span>
             )}
@@ -1414,7 +1588,7 @@ const CardListing = () => {
               <span className="h-5 w-px bg-border" />
               <button
                 onClick={() => window.dispatchEvent(new Event('openComparison'))}
-                className="text-[#0B7A8A] font-semibold text-xs"
+                className="text-accent-text font-semibold text-xs"
               >
                 View Compare
               </button>

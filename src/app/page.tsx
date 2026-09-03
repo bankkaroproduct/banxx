@@ -1,19 +1,20 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import NirajLanding from "@/views/NirajLanding";
+import BanxxHome from "@/views/BanxxHome";
+import { brandConfig } from "@/config/brand.config";
 
 export const metadata: Metadata = {
-  title: "Niraj Dugar — Credit Card Expert",
-  description:
-    "Expert credit card recommendations by Niraj Dugar. Discover India's best credit cards for rewards, travel, cashback, and lifestyle.",
-  robots: "index, follow",
-  alternates: { canonical: "https://great.cards" },
+    title: `${brandConfig.name} - ${brandConfig.tagline}`,
+    description:
+        "Check which credit cards you are eligible for using three details, then compare what each one is worth on your spending.",
+    // Paid affiliate surface: the entry URL carries eligibility parameters.
+    robots: "noindex, nofollow",
 };
 
 export default function Home() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <NirajLanding />
-    </Suspense>
-  );
+    return (
+        <Suspense fallback={<div className="min-h-screen" />}>
+            <BanxxHome />
+        </Suspense>
+    );
 }

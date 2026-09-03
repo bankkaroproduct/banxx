@@ -587,7 +587,7 @@ const BeatMyCard = () => {
 
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8 sm:mb-10 px-4">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-5 bg-gradient-to-r from-[#E0F7F9] to-[#0B7A8A] bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-5 bg-gradient-heading bg-clip-text text-transparent">
                 Beat My Card
               </h1>
               <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto">
@@ -600,7 +600,7 @@ const BeatMyCard = () => {
                   <Sparkles className="w-4 h-4 mr-2" />
                   AI-Powered
                 </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-[#E0F7F9] text-primary border-[#0B7A8A]/20 hover:bg-[#d4ecff] transition-colors">
+                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-surface-elevated text-primary border-primary hover:bg-[#d4ecff] transition-colors">
                   <Shield className="w-4 h-4 mr-2" />
                   Unbiased Results
                 </Badge>
@@ -629,7 +629,7 @@ const BeatMyCard = () => {
         <div className="container mx-auto px-4 py-8">
           {/* Header with Navigation */}
           <div className="flex items-center justify-between mb-8">
-            <Button variant="ghost" onClick={() => router.push('/')} className="gap-2 hover:bg-[#E0F7F9]">
+            <Button variant="ghost" onClick={() => router.push('/')} className="gap-2 hover:bg-accent">
               <Home className="h-4 w-4" />
               <span className="hidden sm:inline">Home</span>
             </Button>
@@ -648,7 +648,7 @@ const BeatMyCard = () => {
                 <span>{Math.round(progress)}% Complete</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-[#0B7A8A] to-[#E0F7F9] transition-all duration-300" style={{
+                <div className="h-full bg-gradient-to-r from-primary to-surface-elevated transition-all duration-300" style={{
                   width: `${progress}%`
                 }} />
               </div>
@@ -665,7 +665,7 @@ const BeatMyCard = () => {
             {/* Navigation buttons */}
             <div className="flex flex-col items-center gap-3 mt-8">
               <div className="flex items-center justify-between w-full gap-4">
-                <Button variant="outline" onClick={handlePrev} disabled={currentStep === 0} className="rounded-full border-2 border-[#0B7A8A] bg-background hover:bg-[#E0F7F9]/20 text-[#0B7A8A] px-8 h-12 transition-all duration-200">
+                <Button variant="outline" onClick={handlePrev} disabled={currentStep === 0} className="rounded-full border-2 border-primary bg-background hover:bg-accent text-accent-text px-8 h-12 transition-all duration-200">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Previous
                 </Button>
@@ -674,7 +674,7 @@ const BeatMyCard = () => {
                   {isCalculating ? "Calculating..." : "Skip All"}
                 </Button>
 
-                <Button onClick={handleNext} disabled={isCalculating} className="rounded-full bg-[#E0F7F9] hover:bg-[#E0F7F9]/90 text-[#064D59] px-8 h-12 shadow-md hover:shadow-lg transition-all duration-200">
+                <Button onClick={handleNext} disabled={isCalculating} className="rounded-full bg-surface-elevated hover:bg-accent text-accent-text px-8 h-12 shadow-md hover:shadow-lg transition-all duration-200">
                   {isCalculating ? <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Calculating...
@@ -707,7 +707,7 @@ const BeatMyCard = () => {
     const userAnnualText = userCardData.annual_saving?.toLocaleString('en-IN') || '0';
     const geniusAnnualText = geniusCardData.annual_saving?.toLocaleString('en-IN') || '0';
     const savingsPercent = userCardData.annual_saving > 0 ? ((geniusCardData.annual_saving - userCardData.annual_saving) / userCardData.annual_saving) * 100 : 100;
-    const heroGradient = isUserWinner ? 'from-[#E0F7F9] via-[#0B7A8A] to-[#0B7A8A]' : 'from-[#0B7A8A] via-[#0B7A8A] to-[#064D59]';
+    const heroGradient = isUserWinner ? 'from-surface-elevated via-primary to-primary' : 'from-primary via-primary to-primary-hover';
     const heroTitle = isUserWinner ? 'You’re already winning!' : 'We Found Your Upgrade!';
     const heroSubtitle = isUserWinner
       ? `Your ${userCardData.name} already earns ₹${userAnnualText} every year.`
@@ -721,7 +721,7 @@ const BeatMyCard = () => {
       {
         label: 'Recommended Card',
         value: geniusCardData.annual_saving || 0,
-        accent: 'from-[#0B7A8A] to-[#085F6D]'
+        accent: 'from-primary to-primary-hover'
       }
     ];
     const extractNumeric = (input: string) => Number(input.replace(/[^0-9.-]/g, ''));
@@ -819,7 +819,7 @@ const BeatMyCard = () => {
     return (
       <>
         <Navigation />
-        <div className="min-h-screen bg-slate-50 pt-24 pb-16">
+        <div className="min-h-screen bg-muted pt-24 pb-16">
           <div className="section-shell max-w-6xl mx-auto space-y-10">
             <div className="flex items-center justify-between">
               <Button
@@ -831,7 +831,7 @@ const BeatMyCard = () => {
                   setResponses({});
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className="gap-2 hover:bg-[#f0f9ff] border-[#0B7A8A]/30 text-primary hover:border-primary"
+                className="gap-2 hover:bg-surface-elevated border-primary text-primary hover:border-primary"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Change Card Selection
@@ -839,9 +839,9 @@ const BeatMyCard = () => {
             </div>
 
             {/* Celebration Hero */}
-            <section className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${heroGradient} text-white p-8 sm:p-10 shadow-2xl`}>
-              <div className="absolute -right-12 -top-12 w-44 h-44 bg-white/20 rounded-full blur-3xl" />
-              <div className="absolute -left-20 bottom-0 w-52 h-52 bg-white/10 rounded-full blur-3xl" />
+            <section className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${heroGradient} text-primary-foreground p-8 sm:p-10 shadow-2xl`}>
+              <div className="absolute -right-12 -top-12 w-44 h-44 bg-card/20 rounded-full blur-3xl" />
+              <div className="absolute -left-20 bottom-0 w-52 h-52 bg-card/10 rounded-full blur-3xl" />
               <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center">
                 <div className="flex-1 space-y-4">
                   <div className="inline-flex items-center gap-3 border border-white/30 rounded-full px-4 py-2 text-sm font-semibold">
@@ -851,7 +851,7 @@ const BeatMyCard = () => {
                   <h1 className="text-3xl sm:text-4xl font-black">{heroTitle}</h1>
                   <p className="text-lg text-white/80 max-w-2xl">{heroSubtitle}</p>
                 </div>
-                <div className="flex-1 bg-white/15 rounded-2xl p-6 backdrop-blur">
+                <div className="flex-1 bg-card/15 rounded-2xl p-6 backdrop-blur">
                   <p className="text-sm uppercase tracking-[0.3em] text-white/70 mb-2">
                     {isUserWinner ? 'Your yearly rewards' : 'Extra savings this year'}
                   </p>
@@ -864,7 +864,7 @@ const BeatMyCard = () => {
                     )}
                   </div>
                   {!isUserWinner && (
-                    <div className="mt-4 inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                    <div className="mt-4 inline-flex items-center gap-2 bg-card/20 text-primary-foreground px-4 py-2 rounded-full text-sm font-semibold">
                       <TrendingUp className="w-4 h-4" />
                       {savingsPercent.toFixed(1)}% higher than your current card
                     </div>
@@ -874,20 +874,20 @@ const BeatMyCard = () => {
             </section>
 
             {/* Comparison */}
-            <section className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
-              <h2 className="text-2xl font-bold text-slate-900">Annual Savings Comparison</h2>
+            <section className="bg-card rounded-3xl border border-border p-6 shadow-sm space-y-6">
+              <h2 className="text-2xl font-bold text-foreground">Annual Savings Comparison</h2>
               <div className="space-y-6">
                 {comparisonBars.map((bar, idx) => {
                   const percent = maxSavings > 0 ? Math.max((bar.value / maxSavings) * 100, 12) : 12;
                   return (
                     <div key={bar.label} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+                      <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
                         <span>{bar.label}</span>
-                        <span className="text-base text-slate-900">₹{bar.value.toLocaleString('en-IN')}</span>
+                        <span className="text-base text-foreground">₹{bar.value.toLocaleString('en-IN')}</span>
                       </div>
-                      <div className="h-12 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-12 bg-muted rounded-full overflow-hidden">
                         <div
-                          className={`h-full bg-gradient-to-r ${bar.accent} flex items-center justify-end pr-4 text-white font-bold`}
+                          className={`h-full bg-gradient-to-r ${bar.accent} flex items-center justify-end pr-4 text-primary-foreground font-bold`}
                           style={{ width: `${percent}%` }}
                         >
                           {idx === 0 && maxSavings > 0 ? `${Math.round((bar.value / maxSavings) * 100)}%` : idx === 1 ? '100%' : ''}
@@ -907,16 +907,16 @@ const BeatMyCard = () => {
                   <div
                     key={card.id || index}
                     onClick={() => { if (index === 1) trackBmcResultCardClicked(card.seo_card_alias, card.name); }}
-                    className={`relative bg-white border rounded-3xl p-6 shadow-lg transition-all ${isWinnerCard ? 'border-4 border-[#0B7A8A] shadow-[#E0F7F9] scale-[1.01]' : 'border-slate-100'
-                      }`}
+                    className={`relative bg-card border rounded-3xl p-6 shadow-lg transition-all ${isWinnerCard ? 'border-4 border-primary shadow-glow scale-[1.01]' : 'border-border'
+ }`}
                   >
                     {isWinnerCard && (
-                      <div className="absolute -top-4 left-6 bg-[#0B7A8A] text-white px-4 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg">
+                      <div className="absolute -top-4 left-6 bg-primary text-primary-foreground px-4 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg">
                         <Sparkles className="w-4 h-4" />
                         Winner Choice
                       </div>
                     )}
-                    <div className="bg-slate-50 rounded-2xl p-6 mb-5">
+                    <div className="bg-muted rounded-2xl p-6 mb-5">
                       <img
                         src={card.image}
                         alt={card.name}
@@ -927,28 +927,28 @@ const BeatMyCard = () => {
                       />
                     </div>
                     <div className="space-y-1 text-center mb-6">
-                      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{card.banks?.name || 'Credit Card'}</p>
-                      <h3 className="text-2xl font-bold text-slate-900">{card.name}</h3>
+                      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{card.banks?.name || 'Credit Card'}</p>
+                      <h3 className="text-2xl font-bold text-foreground">{card.name}</h3>
                       {card.card_type && (
-                        <span className="inline-flex items-center px-3 py-1 bg-slate-100 rounded-full text-xs font-semibold text-slate-600">
+                        <span className="inline-flex items-center px-3 py-1 bg-muted rounded-full text-xs font-semibold text-muted-foreground">
                           {card.card_type}
                         </span>
                       )}
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-5 text-center space-y-2 mb-6">
-                      <p className="text-xs text-slate-500 uppercase tracking-[0.3em]">Annual Savings</p>
-                      <p className="text-4xl font-black text-slate-900">₹{card.annual_saving?.toLocaleString('en-IN') || '0'}</p>
-                      <p className="text-sm text-slate-500">≈ ₹{Math.round((card.annual_saving || 0) / 12).toLocaleString('en-IN')}/month</p>
+                    <div className="rounded-2xl bg-muted p-5 text-center space-y-2 mb-6">
+                      <p className="text-xs text-muted-foreground uppercase tracking-[0.3em]">Annual Savings</p>
+                      <p className="text-4xl font-black text-foreground">₹{card.annual_saving?.toLocaleString('en-IN') || '0'}</p>
+                      <p className="text-sm text-muted-foreground">≈ ₹{Math.round((card.annual_saving || 0) / 12).toLocaleString('en-IN')}/month</p>
                     </div>
-                    <div className="space-y-3 text-sm text-slate-700">
+                    <div className="space-y-3 text-sm text-muted-foreground">
                       {card.joining_fees && (
-                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <div className="flex justify-between border-b border-border pb-2">
                           <span>Joining Fee</span>
                           <strong>₹{card.joining_fees}</strong>
                         </div>
                       )}
                       {card.annual_fee && (
-                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <div className="flex justify-between border-b border-border pb-2">
                           <span>Annual Fee</span>
                           <strong>₹{card.annual_fee}</strong>
                         </div>
@@ -967,25 +967,25 @@ const BeatMyCard = () => {
 
             {/* Data-backed highlights */}
             {comparisonRows.length > 0 && (
-              <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6">
                 <div className="flex flex-col gap-2">
                   <h3 className="text-2xl font-bold">{isUserWinner ? 'How your card stacks up' : 'Why switch to this card'}</h3>
-                  <p className="text-sm text-slate-500">Pulled directly from each card’s actual fees, waivers, and milestone benefits.</p>
+                  <p className="text-sm text-muted-foreground">Pulled directly from each card’s actual fees, waivers, and milestone benefits.</p>
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-slate-100">
-                  <div className="grid grid-cols-[1.2fr,1fr,1fr] bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-[0.25em]">
+                <div className="overflow-hidden rounded-2xl border border-border">
+                  <div className="grid grid-cols-[1.2fr,1fr,1fr] bg-muted text-xs font-semibold text-muted-foreground uppercase tracking-[0.25em]">
                     <div className="px-4 py-3">Metric</div>
                     <div className="px-4 py-3 text-center">Your Card</div>
                     <div className="px-4 py-3 text-center">Recommended Card</div>
                   </div>
                   {comparisonRows.map(row => (
-                    <div key={row.label} className="grid grid-cols-[1.2fr,1fr,1fr] border-t border-slate-100">
+                    <div key={row.label} className="grid grid-cols-[1.2fr,1fr,1fr] border-t border-border">
                       <div className="px-4 py-4">
-                        <p className="font-semibold text-slate-900">{row.label}</p>
-                        {row.helper && <p className="text-sm text-slate-500 mt-1">{row.helper}</p>}
+                        <p className="font-semibold text-foreground">{row.label}</p>
+                        {row.helper && <p className="text-sm text-muted-foreground mt-1">{row.helper}</p>}
                       </div>
-                      <div className="px-4 py-4 text-center font-medium text-slate-900">{row.user}</div>
-                      <div className="px-4 py-4 text-center font-medium text-slate-900">{row.genius}</div>
+                      <div className="px-4 py-4 text-center font-medium text-foreground">{row.user}</div>
+                      <div className="px-4 py-4 text-center font-medium text-foreground">{row.genius}</div>
                     </div>
                   ))}
                 </div>
@@ -995,16 +995,16 @@ const BeatMyCard = () => {
             {/* Category breakdown */}
             {categorySavings.length > 0 && (
               <div className="max-w-4xl mx-auto">
-                <Accordion type="single" collapsible className="bg-white border border-slate-200 rounded-3xl">
+                <Accordion type="single" collapsible className="bg-card border border-border rounded-3xl">
                   <AccordionItem value="breakdown" className="border-none">
                     <AccordionTrigger className="px-6 py-4 hover:no-underline">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#E0F7F9] flex items-center justify-center">
-                          <TrendingUp className="w-5 h-5 text-[#0B7A8A]" />
+                        <div className="w-10 h-10 rounded-full bg-surface-elevated flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-accent-text" />
                         </div>
                         <div className="text-left">
-                          <h3 className="text-lg font-bold text-slate-900">Category-wise breakdown</h3>
-                          <p className="text-sm text-slate-500">See exactly where the extra savings come from</p>
+                          <h3 className="text-lg font-bold text-foreground">Category-wise breakdown</h3>
+                          <p className="text-sm text-muted-foreground">See exactly where the extra savings come from</p>
                         </div>
                       </div>
                     </AccordionTrigger>
@@ -1013,24 +1013,24 @@ const BeatMyCard = () => {
                         {categorySavings.map((category, idx) => {
                           const difference = category.geniusSaving - category.userSaving;
                           return (
-                            <div key={idx} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                            <div key={idx} className="rounded-2xl border border-border bg-muted p-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <span className="text-2xl">{category.emoji}</span>
-                                  <p className="font-semibold text-slate-900">{category.category}</p>
+                                  <p className="font-semibold text-foreground">{category.category}</p>
                                 </div>
                                 {difference > 0 && (
-                                  <span className="text-xs font-semibold text-[#0B7A8A] bg-[#E0F7F9] px-3 py-1 rounded-full">
+                                  <span className="text-xs font-semibold text-accent-text bg-surface-elevated px-3 py-1 rounded-full">
                                     +₹{difference.toLocaleString('en-IN')} more
                                   </span>
                                 )}
                               </div>
                               <div className="grid sm:grid-cols-2 gap-4 mt-3">
-                                {[{ label: 'Your Card', value: category.userSaving, accent: 'from-rose-300 to-rose-400' }, { label: 'Recommended Card', value: category.geniusSaving, accent: 'from-[#0B7A8A] to-[#085F6D]' }].map(column => (
+                                {[{ label: 'Your Card', value: category.userSaving, accent: 'from-rose-300 to-rose-400' }, { label: 'Recommended Card', value: category.geniusSaving, accent: 'from-primary to-primary-hover' }].map(column => (
                                   <div key={column.label} className="space-y-2">
-                                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{column.label}</p>
-                                    <p className="text-xl font-bold text-slate-900">₹{column.value.toLocaleString('en-IN')}</p>
-                                    <div className="h-2 bg-white rounded-full overflow-hidden">
+                                    <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{column.label}</p>
+                                    <p className="text-xl font-bold text-foreground">₹{column.value.toLocaleString('en-IN')}</p>
+                                    <div className="h-2 bg-card rounded-full overflow-hidden">
                                       <div className={`h-full bg-gradient-to-r ${column.accent}`} style={{ width: category.geniusSaving > 0 ? `${(column.value / Math.max(category.geniusSaving, 1)) * 100}%` : '100%' }} />
                                     </div>
                                   </div>
@@ -1047,11 +1047,11 @@ const BeatMyCard = () => {
             )}
 
             {/* CTA */}
-            <section className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6 shadow-sm">
+            <section className="bg-card border border-border rounded-3xl p-6 space-y-6 shadow-sm">
               <div className="flex flex-col md:flex-row gap-4 items-center">
                 <Button
                   size="lg"
-                  className="w-full md:flex-1 text-lg font-semibold bg-[#0B7A8A] hover:bg-[#085F6D] text-white hover:shadow-xl hover:scale-[1.01] transition"
+                  className="w-full md:flex-1 text-lg font-semibold bg-primary hover:bg-primary-hover text-primary-foreground hover:shadow-xl hover:scale-[1.01] transition"
                   onClick={() => handleApplyNow(isUserWinner ? userCardData : geniusCardData)}
                 >
                   Apply for {isUserWinner ? 'This Card' : 'Better Card'}

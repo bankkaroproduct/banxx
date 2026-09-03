@@ -44,7 +44,16 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
           glow: "hsl(var(--primary-glow))",
+        },
+        // The indigo that is safe as TEXT in the current mode. In dark mode this
+        // resolves to indigo-300, because true indigo on #121212 is 3.18:1 and
+        // fails WCAG AA. There is intentionally no utility for indigo-as-text.
+        "accent-text": "hsl(var(--accent-text))",
+        surface: {
+          elevated: "hsl(var(--surface-elevated))",
+          "elevated-foreground": "hsl(var(--surface-elevated-foreground))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -70,49 +79,16 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        green: {
-          50: "hsl(var(--mc-green-50))",
-          100: "hsl(var(--mc-green-100))",
-          200: "hsl(var(--mc-green-200))",
-          500: "hsl(var(--mc-green-500))",
-          600: "hsl(var(--mc-green-600))",
-          700: "hsl(var(--mc-green-700))",
-          900: "hsl(var(--mc-green-900))",
-        },
-        charcoal: {
-          50: "hsl(var(--charcoal-50))",
-          100: "hsl(var(--charcoal-100))",
-          200: "hsl(var(--charcoal-200))",
-          300: "hsl(var(--charcoal-300))",
-          500: "hsl(var(--charcoal-500))",
-          700: "hsl(var(--charcoal-700))",
-          800: "hsl(var(--charcoal-800))",
-          900: "hsl(var(--charcoal-900))",
-        },
-        success: {
-          50: "hsl(var(--success-50))",
-          500: "hsl(var(--success-500))",
-          700: "hsl(var(--success-700))",
-        },
-        warning: {
-          50: "hsl(var(--warning-50))",
-          500: "hsl(var(--warning-500))",
-          700: "hsl(var(--warning-700))",
-        },
-        error: {
-          50: "hsl(var(--error-50))",
-          500: "hsl(var(--error-500))",
-          700: "hsl(var(--error-700))",
-        },
-        info: {
-          50: "hsl(var(--info-50))",
-          500: "hsl(var(--info-500))",
-          700: "hsl(var(--info-700))",
-        },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        error: "hsl(var(--error))",
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',
         'gradient-accent': 'var(--gradient-accent)',
+        // Use this for bg-clip-text headings, never a from-/to- pair built on
+        // --primary: indigo as text fails AA on the dark surface.
+        'gradient-heading': 'var(--gradient-heading)',
         'gradient-hero': 'var(--gradient-hero)',
         'gradient-card': 'var(--gradient-card)',
         'gradient-shimmer': 'var(--gradient-shimmer)',
@@ -129,8 +105,10 @@ export default {
         'card-hover': 'var(--shadow-card-hover)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['Space Grotesk', 'monospace'],
+        // Raleway is loaded self-hosted by next/font in app/layout.tsx, which
+        // exposes it as --font-raleway.
+        sans: ['var(--font-raleway)', 'Raleway', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {
         lg: "var(--radius)",

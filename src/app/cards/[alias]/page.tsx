@@ -9,7 +9,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { alias } = await params;
   return {
     robots: 'noindex, nofollow',
-    alternates: { canonical: `https://great.cards/credit-card-store/${alias}` },
   };
 }
 

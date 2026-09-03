@@ -97,7 +97,7 @@ const categories: CategoryConfig[] = [{
   id: 'bills',
   name: 'Paying Bills',
   icon: CreditCard,
-  color: 'text-[#0B7A8A]',
+  color: 'text-accent-text',
   questions: [{
     field: 'mobile_phone_bills',
     question: 'How much do you spend on recharging your mobile or Wi-Fi monthly?',
@@ -124,7 +124,7 @@ const categories: CategoryConfig[] = [{
   id: 'fuel',
   name: 'Fuel',
   icon: Fuel,
-  color: 'text-[#0B7A8A]',
+  color: 'text-accent-text',
   questions: [{
     field: 'fuel',
     question: 'How much do you spend on fuel in a month?',
@@ -137,7 +137,7 @@ const categories: CategoryConfig[] = [{
   id: 'travel',
   name: 'Flight & Hotel',
   icon: Plane,
-  color: 'text-[#0B7A8A]',
+  color: 'text-accent-text',
   questions: [{
     field: 'flights_annual',
     question: 'How much do you spend on flights in a year?',
@@ -190,7 +190,7 @@ const categories: CategoryConfig[] = [{
   id: 'grocery',
   name: 'Grocery',
   icon: ShoppingCart,
-  color: 'text-[#0B7A8A]',
+  color: 'text-accent-text',
   questions: [{
     field: 'grocery_spends_online',
     question: 'How much do you spend on groceries (Blinkit, Zepto etc.) every month?',
@@ -272,21 +272,9 @@ useEffect(() => {
     const controller = new AbortController();
 
     const fetchCatalog = async () => {
-      const baseParams = {
-        slug: "",
-        banks_ids: [],
-        card_networks: [],
-        annualFees: "",
-        credit_score: "",
-        sort_by: "",
-        free_cards: "",
-        eligiblityPayload: {},
-        cardGeniusPayload: []
-      };
-
       try {
         setCardCatalogLoading(true);
-        const response = await cardService.getCardListing(baseParams, controller.signal);
+        const response = await cardService.getCardListing({}, controller.signal);
         if (!isMounted) return;
 
         const data = Array.isArray(response?.data?.cards)
@@ -507,12 +495,12 @@ useEffect(() => {
       handleViewDetails(card);
     }
   };
-  return <><section className="pt-28 sm:pt-32 pb-12 sm:pb-20 bg-gradient-to-br from-[#f0f9ff] via-[#E0F7F9]/5 to-accent/5">
+  return <><section className="pt-28 sm:pt-32 pb-12 sm:pb-20 bg-gradient-to-br from-surface-elevated via-surface-elevated to-accent/5">
     <div className="section-shell">
       {/* Header - Always visible */}
       <div className="text-center mb-8 sm:mb-12">
 
-        <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-[#0B7A8A] to-[#E0F7F9] bg-clip-text text-transparent px-4">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-heading bg-clip-text text-transparent px-4">
           Find Best Cards by Category
         </h2>
         <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
@@ -523,7 +511,7 @@ useEffect(() => {
       {/* Category Selection - Always visible */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-8 sm:mb-12">
         {categories.map(category => <button key={category.id} onClick={() => handleCategorySelect(category.id)} className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-card shadow-md hover:shadow-xl transition-all text-center group relative overflow-hidden touch-target ${selectedCategory === category.id ? 'ring-2 ring-primary shadow-glow' : ''}`}>
-          <div className="absolute inset-0 bg-gradient-to-br from-[#f0f9ff] to-[#E0F7F9]/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-surface-elevated to-surface-elevated opacity-0 group-hover:opacity-100 transition-opacity" />
           <category.icon className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 mx-auto mb-2 sm:mb-3 ${category.color} group-hover:scale-110 transition-transform relative z-10`} />
           <p className="text-xs sm:text-sm font-semibold relative z-10">{category.name}</p>
         </button>)}
@@ -532,7 +520,7 @@ useEffect(() => {
       {/* Results Section */}
       {results && results.length > 0 ? <div ref={resultsRef} className="animate-fade-in scroll-mt-20">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 bg-[#E0F7F9] text-[#0B7A8A] px-6 py-3 rounded-full mb-4 border border-[#0B7A8A]">
+          <div className="inline-flex items-center gap-2 bg-surface-elevated text-accent-text px-6 py-3 rounded-full mb-4 border border-primary">
             <TrendingUp className="w-5 h-5" />
             <span className="font-bold">Your Personalized Results</span>
           </div>
@@ -543,9 +531,9 @@ useEffect(() => {
         </div>
 
         <div className="cards-grid mb-8 sm:mb-12">
-          {results.map((card: any, index: number) => <div key={card.id || index} className="bg-card rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-[#0B7A8A]/20 relative">
+          {results.map((card: any, index: number) => <div key={card.id || index} className="bg-card rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-primary relative">
             {index === 0 && <div className="absolute top-4 right-4 z-10">
-              <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
+              <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-primary-foreground border-0 px-3 py-1 text-xs font-bold shadow-lg">
                 🏆 Best Match
               </Badge>
             </div>}
@@ -560,18 +548,18 @@ useEffect(() => {
               <h3 className="text-xl font-bold mb-4 min-h-[3rem] line-clamp-2">{card.card_name}</h3>
 
               {/* Savings Highlight - Prominent */}
-              <div className="bg-gradient-to-br from-[#E0F7F9]/20 to-[#E0F7F9]/40 dark:from-[#0B7A8A]/20 dark:to-[#0B7A8A]/40 border-2 border-[#0B7A8A] dark:border-[#0B7A8A] rounded-xl p-5 mb-4 shadow-md">
+              <div className="bg-gradient-to-br from-surface-elevated to-surface-elevated border-2 border-primary rounded-xl p-5 mb-4 shadow-md">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-[#0B7A8A]" />
-                    <span className="text-sm font-bold text-[#0B7A8A] dark:text-[#0B7A8A]">You'll Save</span>
+                    <TrendingUp className="w-5 h-5 text-accent-text" />
+                    <span className="text-sm font-bold text-accent-text">You'll Save</span>
                   </div>
-                  <Badge variant="outline" className="text-xs text-[#0B7A8A] dark:text-[#0B7A8A] border-[#0B7A8A] dark:border-[#0B7A8A]">Per Year</Badge>
+                  <Badge variant="outline" className="text-xs text-accent-text border-primary">Per Year</Badge>
                 </div>
-                <p className="text-4xl font-black text-[#0B7A8A] dark:text-[#0B7A8A] mb-2">
+                <p className="text-4xl font-black text-accent-text mb-2">
                   ₹{Math.round(card.net_savings ?? 0).toLocaleString()}
                 </p>
-                <div className="space-y-1 text-xs text-[#0B7A8A] dark:text-[#0B7A8A] font-medium">
+                <div className="space-y-1 text-xs text-accent-text font-medium">
                   {card.total_savings_yearly ? (
                     <p>Base savings: ₹{Math.round(card.total_savings_yearly).toLocaleString()}</p>
                   ) : null}
@@ -596,7 +584,7 @@ useEffect(() => {
                   <p className="text-xs text-muted-foreground">Joining Fee</p>
                   <p className="font-semibold">{feeCalc(card.joining_fee_text).display}</p>
                   {feeCalc(card.joining_fee_text).tooltip && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                       {feeCalc(card.joining_fee_text).tooltip}
                     </div>
                   )}
@@ -605,7 +593,7 @@ useEffect(() => {
                   <p className="text-xs text-muted-foreground">Annual Fee</p>
                   <p className="font-semibold">{feeCalc(card.annual_fee_text).display}</p>
                   {feeCalc(card.annual_fee_text).tooltip && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                       {feeCalc(card.annual_fee_text).tooltip}
                     </div>
                   )}
@@ -634,7 +622,7 @@ useEffect(() => {
                       const categoryName = formatCategoryName(rawName);
 
                       return (
-                        <div key={key} className="bg-white dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm hover:shadow-md transition-shadow">
+                        <div key={key} className="bg-card dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm hover:shadow-md transition-shadow">
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1">
                               <h4 className="text-sm font-semibold text-foreground mb-1">
@@ -647,7 +635,7 @@ useEffect(() => {
                               )}
                             </div>
                             <div className="text-right ml-4">
-                              <span className="text-lg font-bold text-[#0B7A8A] dark:text-[#0B7A8A]">
+                              <span className="text-lg font-bold text-accent-text">
                                 +₹{Math.round(savingsValue).toLocaleString()}
                               </span>
                             </div>
@@ -678,14 +666,14 @@ useEffect(() => {
 
                     {/* Airport Lounge Breakdown */}
                     {card.airport_lounge_value > 0 && (
-                      <div className="mt-4 pt-4 border-t-2 border-[#0B7A8A]/30">
+                      <div className="mt-4 pt-4 border-t-2 border-primary">
                         <h3 className="text-sm font-bold text-primary mb-3 uppercase tracking-wide">
                           Airport Lounge Benefits
                         </h3>
 
                         <div className="space-y-3">
                           {card.domestic_lounge_value > 0 && (
-                            <div className="bg-white dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm">
+                            <div className="bg-card dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm">
                               <div className="flex justify-between items-start mb-2">
                                 <div className="flex-1">
                                   <h4 className="text-sm font-semibold text-foreground mb-1">
@@ -699,7 +687,7 @@ useEffect(() => {
                                   </p>
                                 </div>
                                 <div className="text-right ml-4">
-                                  <span className="text-lg font-bold text-[#0B7A8A] dark:text-[#E0F7F9]">
+                                  <span className="text-lg font-bold text-accent-text">
                                     +₹{card.domestic_lounge_value.toLocaleString()}
                                   </span>
                                 </div>
@@ -708,7 +696,7 @@ useEffect(() => {
                           )}
 
                           {card.international_lounge_value > 0 && (
-                            <div className="bg-white dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm">
+                            <div className="bg-card dark:bg-muted/50 rounded-lg p-4 border border-border shadow-sm">
                               <div className="flex justify-between items-start mb-2">
                                 <div className="flex-1">
                                   <h4 className="text-sm font-semibold text-foreground mb-1">
@@ -722,7 +710,7 @@ useEffect(() => {
                                   </p>
                                 </div>
                                 <div className="text-right ml-4">
-                                  <span className="text-lg font-bold text-[#0B7A8A] dark:text-[#E0F7F9]">
+                                  <span className="text-lg font-bold text-accent-text">
                                     +₹{card.international_lounge_value.toLocaleString()}
                                   </span>
                                 </div>
@@ -731,12 +719,12 @@ useEffect(() => {
                           )}
 
                           {card.airport_lounge_value > 0 && (
-                            <div className="bg-gradient-to-r from-[#E0F7F9]/30 to-[#E0F7F9]/50 dark:from-[#0B7A8A]/30 dark:to-[#0B7A8A]/50 rounded-lg p-4 border-2 border-[#E0F7F9] dark:border-[#0B7A8A]">
+                            <div className="bg-gradient-to-r from-surface-elevated to-surface-elevated rounded-lg p-4 border-2 border-border">
                               <div className="flex justify-between items-center">
                                 <span className="font-semibold text-foreground">
                                   Total Lounge Value
                                 </span>
-                                <span className="text-xl font-bold text-[#0B7A8A] dark:text-[#E0F7F9]">
+                                <span className="text-xl font-bold text-accent-text">
                                   +₹{card.airport_lounge_value.toLocaleString()}
                                 </span>
                               </div>
@@ -763,7 +751,7 @@ useEffect(() => {
         </div>
       </div> : loading ? (/* Loading State with Fun Facts */
         <div className="max-w-2xl mx-auto text-center animate-fade-in">
-          <div className="bg-card rounded-3xl p-12 shadow-2xl border-2 border-[#0B7A8A]/20">
+          <div className="bg-card rounded-3xl p-12 shadow-2xl border-2 border-primary">
             <div className="mb-8">
               <Loader2 className="w-16 h-16 mx-auto text-primary animate-spin" />
             </div>
@@ -771,7 +759,7 @@ useEffect(() => {
             <p className="text-muted-foreground mb-8">
               Our AI is analyzing thousands of card combinations to find your perfect match
             </p>
-            <div className="bg-gradient-to-br from-[#E0F7F9] to-[#E0F7F9]/10 rounded-2xl p-6 min-h-[100px] flex items-center justify-center">
+            <div className="bg-gradient-to-br from-surface-elevated to-surface-elevated rounded-2xl p-6 min-h-[100px] flex items-center justify-center">
               <p className="text-lg font-medium text-foreground animate-fade-in">
                 {creditCardFacts[currentFactIndex]}
               </p>
@@ -790,7 +778,7 @@ useEffect(() => {
                 </span>
               </div>
               <div className="w-full h-3 bg-muted rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-gradient-to-r from-[#0B7A8A] via-[#E0F7F9] to-accent transition-all duration-500 shadow-lg" style={{
+                <div className="h-full bg-gradient-to-r from-primary via-surface-elevated to-accent transition-all duration-500 shadow-lg" style={{
                   width: `${(currentQuestionIndex + 1) / selectedCategoryData.questions.length * 100}%`
                 }} />
               </div>
@@ -828,15 +816,15 @@ useEffect(() => {
           </p>
           <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-[#E0F7F9] text-primary font-bold flex items-center justify-center text-lg">1</div>
+              <div className="w-10 h-10 rounded-full bg-surface-elevated text-primary font-bold flex items-center justify-center text-lg">1</div>
               <span className="font-medium">Choose Category</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-[#E0F7F9] text-primary font-bold flex items-center justify-center text-lg">2</div>
+              <div className="w-10 h-10 rounded-full bg-surface-elevated text-primary font-bold flex items-center justify-center text-lg">2</div>
               <span className="font-medium">Answer Questions</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-[#E0F7F9] text-primary font-bold flex items-center justify-center text-lg">3</div>
+              <div className="w-10 h-10 rounded-full bg-surface-elevated text-primary font-bold flex items-center justify-center text-lg">3</div>
               <span className="font-medium">Get Top 3 Cards</span>
             </div>
           </div>

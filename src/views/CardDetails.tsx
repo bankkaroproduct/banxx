@@ -367,7 +367,7 @@ export default function CardDetails() {
             </div>
 
             {/* Card Info */}
-            <div className="text-white space-y-6 animate-fade-in w-full">
+            <div className="text-primary-foreground space-y-6 animate-fade-in w-full">
               <div className="space-y-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-white/70">Card overview</p>
                 <h1 className="text-3xl md:text-4xl font-bold">{card.name}</h1>
@@ -386,7 +386,7 @@ export default function CardDetails() {
                     <span className="text-yellow-400 mt-1">✓</span>
                     <div>
                       <p className="font-semibold">{usp.header}</p>
-                      <p className="text-sm text-gray-200">{usp.description}</p>
+                      <p className="text-sm text-muted-foreground">{usp.description}</p>
                     </div>
                   </div>
                 ))}
@@ -394,14 +394,14 @@ export default function CardDetails() {
 
               {/* Status badge */}
               {getCardStatus(card) === 'discontinued' && (
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-[#1A3B38] text-[#BDE6E2] border border-[#0B7A8A]/40 shadow-md">
-                  <span className="w-2 h-2 rounded-full bg-[#BDE6E2] inline-block" />
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-primary text-primary-foreground border border-primary shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-primary-glow inline-block" />
                   Discontinued
                 </span>
               )}
               {getCardStatus(card) === 'invite_only' && (
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-[#0B7A8A] text-white shadow-md">
-                  <span className="w-2 h-2 rounded-full bg-white inline-block" />
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-primary text-primary-foreground shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-card inline-block" />
                   Invite Only
                 </span>
               )}
@@ -412,7 +412,7 @@ export default function CardDetails() {
                   <Button
                     size="lg"
                     onClick={handleApply}
-                    className="bg-white text-primary hover:bg-white/90 font-semibold"
+                    className="bg-card text-primary hover:bg-card/90 font-semibold"
                   >
                     Apply Now
                     <ExternalLink className="ml-2 w-4 h-4" />
@@ -433,7 +433,7 @@ export default function CardDetails() {
                         });
                       }
                     }}
-                    className="border-white text-white hover:bg-white/10"
+                    className="border-white text-primary-foreground hover:bg-card/10"
                   >
                     <Shield className="mr-2 w-4 h-4" />
                     Check Eligibility
@@ -448,8 +448,8 @@ export default function CardDetails() {
                     analytics.trackCardAction('Compare', card.name);
                   }}
                   className={isSelected(card.seo_card_alias)
-                    ? "border border-white/50 text-white bg-white/20 hover:bg-white/30"
-                    : "border border-white/30 text-white/80 hover:text-white hover:bg-white/10"
+                    ? "border border-white/50 text-primary-foreground bg-card/20 hover:bg-card/30"
+                    : "border border-white/30 text-white/80 hover:text-primary-foreground hover:bg-card/10"
                   }
                 >
                   {isSelected(card.seo_card_alias) ? (
@@ -499,7 +499,7 @@ export default function CardDetails() {
                 trackCardDetailsCompareClicked(card.seo_card_alias || alias, card.name);
               }}
               className={`touch-target h-12 sm:h-14 px-4 sm:px-6 ${isSelected(card.seo_card_alias)
-                ? "border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-lg"
+ ? "border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-lg"
                 : "border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold"
                 }`}
             >
@@ -536,7 +536,7 @@ export default function CardDetails() {
                   key={section.id}
                   onClick={() => scrollToSection(section.ref, section.id)}
                   className={`flex-shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl whitespace-nowrap transition-all duration-200 touch-target ${activeSection === section.id
-                    ? 'bg-primary text-primary-foreground shadow-md scale-105'
+ ? 'bg-primary text-primary-foreground shadow-md scale-105'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted'
                     }`}
                 >
@@ -562,7 +562,7 @@ export default function CardDetails() {
                     <span className="text-xl font-bold text-foreground">{jf.inline}</span>
                   </div>
                   {card.joining_fee_offset && (
-                    <div className="bg-[#E0F7F9] border border-[#0B7A8A]/20 rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
+                    <div className="bg-surface-elevated border border-primary rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
                       <p className="text-xs font-medium text-primary leading-relaxed">
                         {card.joining_fee_offset}
                       </p>
@@ -575,7 +575,7 @@ export default function CardDetails() {
                     <span className="text-xl font-bold text-foreground">{af.inline}</span>
                   </div>
                   {card.annual_fee_waiver && (
-                    <div className="bg-[#E0F7F9] border border-[#0B7A8A]/20 rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
+                    <div className="bg-surface-elevated border border-primary rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
                       <p className="text-xs font-semibold text-primary mb-1">Waiver</p>
                       <p className="text-xs text-primary/90 leading-relaxed">
                         {card.annual_fee_waiver}
@@ -624,7 +624,7 @@ export default function CardDetails() {
                   className="bg-card border border-border rounded-lg p-5 hover:border-primary/50 transition-all duration-200"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#E0F7F9] flex items-center justify-center flex-shrink-0 mt-1">
+                    <div className="w-10 h-10 rounded-full bg-surface-elevated flex items-center justify-center flex-shrink-0 mt-1">
                       <span className="text-primary text-lg">✓</span>
                     </div>
                     <div className="flex-1">
@@ -646,7 +646,7 @@ export default function CardDetails() {
               {card.tags.map((tag) => (
                 <span
                   key={tag.id}
-                  className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0F7F9] text-primary border border-[#0B7A8A]/20"
+                  className="px-3 py-1 rounded-full text-sm font-medium bg-surface-elevated text-primary border border-primary"
                 >
                   {tag.name}
                 </span>
@@ -689,7 +689,7 @@ export default function CardDetails() {
                     <div
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.redemption_options) }}
                       className="prose prose-sm max-w-none text-muted-foreground 
-                      [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-2 
+ [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-2 
                       [&>li]:text-muted-foreground [&>li]:leading-relaxed
                       [&>p]:mb-3 [&>p]:leading-relaxed
                       [&>strong]:text-foreground [&>strong]:font-semibold"
@@ -832,7 +832,7 @@ export default function CardDetails() {
                         key={category}
                         onClick={() => setSelectedBenefitCategory(category)}
                         className={`px-6 py-3 rounded-full text-sm font-semibold whitespace-nowrap transition-all shadow-md ${isActive
-                          ? 'bg-primary text-primary-foreground scale-105 shadow-lg'
+ ? 'bg-primary text-primary-foreground scale-105 shadow-lg'
                           : 'bg-card text-muted-foreground hover:bg-muted border border-border'
                           }`}
                       >
@@ -857,7 +857,7 @@ export default function CardDetails() {
                   >
                     <div className="p-6">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] flex items-center justify-center flex-shrink-0 shadow-md">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-surface-elevated flex items-center justify-center flex-shrink-0 shadow-md">
                           <span className="text-primary-foreground text-sm font-bold">✓</span>
                         </div>
                         <div className="flex-1">
@@ -865,7 +865,7 @@ export default function CardDetails() {
                           <div
                             dangerouslySetInnerHTML={{ __html: sanitizeHtml(benefit.html_text) }}
                             className="prose prose-sm max-w-none text-muted-foreground 
-                              [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1 
+ [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1 
                               [&>li]:text-muted-foreground [&>li]:leading-relaxed
                               [&>p]:mb-2 [&>p]:leading-relaxed
                               [&>strong]:text-foreground [&>strong]:font-semibold"
@@ -885,8 +885,8 @@ export default function CardDetails() {
         )}
 
         {/* How to Apply - Enhanced */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-[#E0F7F9] via-[#E0F7F9]/10 to-accent/10 border-2 border-[#0B7A8A]/20 rounded-2xl p-6 sm:p-8 lg:p-10 shadow-xl">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#f0f9ff] rounded-full blur-3xl -z-10" />
+        <section className="relative overflow-hidden bg-gradient-to-br from-surface-elevated via-surface-elevated to-accent/10 border-2 border-primary rounded-2xl p-6 sm:p-8 lg:p-10 shadow-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-surface-elevated rounded-full blur-3xl -z-10" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/5 rounded-full blur-3xl -z-10" />
 
           <div className="text-center mb-6 sm:mb-8">
@@ -897,7 +897,7 @@ export default function CardDetails() {
 
           <div className="grid gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8 max-w-4xl mx-auto md:grid-cols-3">
             <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-primary to-surface-elevated text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
                 1
               </div>
               <div className="text-left md:text-center">
@@ -906,7 +906,7 @@ export default function CardDetails() {
               </div>
             </div>
             <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-primary to-surface-elevated text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
                 2
               </div>
               <div className="text-left md:text-center">
@@ -915,7 +915,7 @@ export default function CardDetails() {
               </div>
             </div>
             <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-primary to-surface-elevated text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
                 3
               </div>
               <div className="text-left md:text-center">

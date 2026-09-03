@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import CardGeniusCategory from "@/views/CardGeniusCategory";
 
 export const metadata: Metadata = {
-  robots: 'noindex, follow',
-  alternates: { canonical: 'https://great.cards/cg-360' },
+  robots: 'noindex, nofollow',
 };
 
 export default function CardGeniusCategoryPage() {

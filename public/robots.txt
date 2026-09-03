@@ -1,12 +1,8 @@
+# Banxx (banxx.bankkaro.com) is a paid affiliate surface. The entry URL carries
+# eligibility parameters including salary, and the home route renders results
+# rather than marketing content. Nothing here should be indexed.
+#
+# Also enforced by the X-Robots-Tag header in next.config.mjs and by the route
+# metadata, since robots.txt alone does not prevent indexing of a linked URL.
 User-agent: *
-Allow: /$
-Disallow: /cards/
-Disallow: /card-genius/
-Disallow: /card-genius-category/
-Disallow: /beat-my-card/
-Disallow: /compare/
-Disallow: /api/
-Disallow: /redirect/
-Disallow: /blogs/
-
-# Canonical source: https://great.cards/sitemap.xml
+Disallow: /

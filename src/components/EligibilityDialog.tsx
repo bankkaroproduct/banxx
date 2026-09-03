@@ -6,7 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2 } from 'lucide-react';
-import { cardService } from '@/services/cardService';
+import { cardService, extractEligibleAliases } from '@/services/cardService';
+import {
+  isValidPincode,
+  normalizeMonthlySalary,
+  toBreIncome,
+  type EmpStatus,
+} from '@/lib/eligibilityParams';
+import { loadEligibility, perCardKey, saveEligibility } from '@/lib/eligibilityStore';
 import { toast } from 'sonner';
 import EligibilityResultDialog from './EligibilityResultDialog';
 import {
@@ -32,7 +39,7 @@ interface EligibilityDialogProps {
 interface FormData {
   pincode: string;
   inhandIncome: string;
-  empStatus: 'salaried' | 'self_employed' | '';
+  empStatus: EmpStatus | '';
 }
 
 interface FormErrors {
@@ -65,14 +72,26 @@ export default function EligibilityDialog({
   const [lastResetTime, setLastResetTime] = useState(Date.now());
 
   useEffect(() => {
-    // Load prefilled data from session storage
-    const savedData = sessionStorage.getItem(`eligibility_${cardAlias}`);
+    // Prefill: this card's own last answer first, then the session-wide
+    // eligibility basis (which URL hydration writes), so a user who arrived
+    // from a partner link is never asked for details they already supplied.
+    const savedData = sessionStorage.getItem(perCardKey(cardAlias));
     if (savedData) {
       try {
         setFormData(JSON.parse(savedData));
-      } catch (e) {
-        // Ignore parse errors
+        return;
+      } catch {
+        /* fall through to the global basis */
       }
+    }
+
+    const basis = loadEligibility();
+    if (basis.pincode || basis.inhandIncome || basis.empStatus) {
+      setFormData({
+        pincode: basis.pincode ?? '',
+        inhandIncome: basis.inhandIncome ? String(basis.inhandIncome) : '',
+        empStatus: basis.empStatus ?? '',
+      });
     }
   }, [cardAlias]);
 
@@ -88,21 +107,18 @@ export default function EligibilityDialog({
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // Pincode validation
+    // Shared validators: the adapter and every form surface must agree, or a
+    // value the adapter rejected could be accepted here on retype.
     if (!formData.pincode) {
       newErrors.pincode = 'Pincode is required';
-    } else if (!/^\d{6}$/.test(formData.pincode)) {
+    } else if (!isValidPincode(formData.pincode)) {
       newErrors.pincode = 'Please enter a valid 6-digit pincode';
     }
 
-    // Income validation
     if (!formData.inhandIncome) {
       newErrors.inhandIncome = 'Income is required';
-    } else {
-      const income = parseInt(formData.inhandIncome.replace(/,/g, ''));
-      if (isNaN(income) || income < 5000) {
-        newErrors.inhandIncome = 'Please enter a valid income (minimum ₹5,000)';
-      }
+    } else if (!normalizeMonthlySalary(formData.inhandIncome).ok) {
+      newErrors.inhandIncome = 'Please enter a valid monthly income';
     }
 
     // Employment status validation
@@ -137,26 +153,25 @@ export default function EligibilityDialog({
     }
 
     try {
-      // Save to session storage for prefill
-      sessionStorage.setItem(`eligibility_${cardAlias}`, JSON.stringify(formData));
+      // Save to session storage for prefill, both per-card and session-wide.
+      sessionStorage.setItem(perCardKey(cardAlias), JSON.stringify(formData));
 
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 12000)
-      );
-
-      const apiCall = cardService.checkEligibility({
-        cardAlias,
+      const monthly = normalizeMonthlySalary(formData.inhandIncome);
+      const empStatus = formData.empStatus as EmpStatus;
+      saveEligibility({
         pincode: formData.pincode,
-        inhandIncome: formData.inhandIncome.replace(/,/g, ''),
-        empStatus: formData.empStatus as 'salaried' | 'self_employed'
+        inhandIncome: monthly.ok ? monthly.value : undefined,
+        empStatus,
       });
 
-      const response = await Promise.race([apiCall, timeout]) as any;
+      const response = await cardService.checkEligibility({
+        pincode: formData.pincode,
+        // toBreIncome documents the unit: the API takes MONTHLY rupees.
+        inhandIncome: toBreIncome(monthly.value),
+        empStatus,
+      });
 
-      // /cg-eligibility returns data: [{seo_card_alias, eligible, ...}]
-      const cards: any[] = Array.isArray(response?.data) ? response.data : [];
-      const matchedCard = cards.find((c: any) => (c?.seo_card_alias || c?.card_alias) === cardAlias);
-      const isEligible = matchedCard?.eligible === true;
+      const isEligible = extractEligibleAliases(response).includes(cardAlias);
 
       // Track result analytics
       if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -182,7 +197,7 @@ export default function EligibilityDialog({
     } catch (error: any) {
       console.error('Eligibility check error:', error);
 
-      if (error.message === 'Request timeout') {
+      if (error?.name === 'AbortError') {
         toast.error('Request timed out. Please try again.');
       } else {
         toast.error('We couldn\'t check eligibility right now. Please try again.', {

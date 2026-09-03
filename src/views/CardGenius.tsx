@@ -4,7 +4,15 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SpendingInput } from "@/components/ui/spending-input";
 import { ArrowLeft, ArrowRight, Sparkles, ChevronDown, Info, Check, X, TrendingUp, CheckCircle2 } from "lucide-react";
-import { cardService } from "@/services/cardService";
+import { cardService, extractEligibleAliases } from "@/services/cardService";
+import {
+  EMP_STATUS_OPTIONS,
+  isValidPincode,
+  normalizeMonthlySalary,
+  toBreIncome,
+  type EmpStatus,
+} from "@/lib/eligibilityParams";
+import { saveEligibility } from "@/lib/eligibilityStore";
 import type { SpendingData } from "@/services/cardService";
 import { useToast } from "@/hooks/use-toast";
 import { sanitizeHtml } from "@/lib/sanitize";
@@ -28,7 +36,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import logo from "@/assets/moneycontrol-logo.png";
 interface SpendingQuestion {
   field: string;
   question: string;
@@ -502,34 +509,50 @@ const CardGenius = () => {
     }
   };
   const handleEligibilityCheck = async () => {
-    if (!eligibilityData.pincode || !eligibilityData.inhandIncome || !eligibilityData.empStatus) {
+    // Shared validators, so this surface cannot accept a value the URL adapter
+    // rejected (or reject one it accepted).
+    if (!isValidPincode(eligibilityData.pincode)) {
+      toast({
+        title: "Invalid pincode",
+        description: "Please enter a valid 6-digit pincode",
+        variant: "destructive"
+      });
+      return;
+    }
+    const monthly = normalizeMonthlySalary(eligibilityData.inhandIncome);
+    if (!monthly.ok) {
+      toast({
+        title: "Invalid income",
+        description: "Please enter a valid monthly income",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (!eligibilityData.empStatus) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all fields",
+        description: "Please select your employment status",
         variant: "destructive"
       });
       return;
     }
     try {
-      const response = await fetch('https://bk-prod-external.bankkaro.com/sp/api/cg-eligiblity', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          pincode: eligibilityData.pincode,
-          inhandIncome: eligibilityData.inhandIncome,
-          empStatus: eligibilityData.empStatus
-        })
+      // Goes through the service: the inline fetch this replaced was one of two
+      // duplicated copies of the same call.
+      const data = await cardService.checkEligibility({
+        pincode: eligibilityData.pincode,
+        // toBreIncome documents the unit: the API takes MONTHLY rupees.
+        inhandIncome: toBreIncome(monthly.value),
+        empStatus: eligibilityData.empStatus as EmpStatus,
       });
-      const data = await response.json();
+      saveEligibility({
+        pincode: eligibilityData.pincode,
+        inhandIncome: monthly.value,
+        empStatus: eligibilityData.empStatus as EmpStatus,
+      });
       if (data.status && data.data) {
-        // Filter only eligible cards (where eligible === true)
-        const eligibleCards = data.data.filter((card: any) => card.eligible === true);
-        const ineligibleCount = data.data.length - eligibleCards.length;
-
-        // Extract seo_card_alias from eligible cards only
-        const aliases = eligibleCards.map((card: any) => card.seo_card_alias);
+        const aliases = extractEligibleAliases(data);
+        const ineligibleCount = data.data.length - aliases.length;
         setEligibleCardAliases(aliases);
         setEligibilityApplied(true);
         setEligibilityOpen(false);
@@ -586,7 +609,7 @@ const CardGenius = () => {
       const totalLoungeValue = Number(selectedCard.airport_lounge_value || 0);
       const milestoneValue = Number(selectedCard.milestone_benefits_only || 0);
       const joiningFeeValue = feeCalc(selectedCard.joining_fee_text).withGST;
-      return <div className="min-h-screen bg-slate-50">
+      return <div className="min-h-screen bg-muted">
         <Navigation />
         <main className="section-shell mx-auto pt-24 pb-16 max-w-4xl space-y-6">
           <button onClick={() => setSelectedCard(null)} className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors gap-2">
@@ -594,20 +617,20 @@ const CardGenius = () => {
             Back to all recommendations
           </button>
 
-          <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#E0F7F9] via-[#E0F7F9] to-[#E0F7F9] text-[#064D59] p-6 sm:p-8 shadow-2xl flex flex-col gap-6 sm:flex-row sm:items-center">
-            <button onClick={() => setSelectedCard(null)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
+          <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-surface-elevated via-surface-elevated to-surface-elevated text-accent-text p-6 sm:p-8 shadow-2xl flex flex-col gap-6 sm:flex-row sm:items-center">
+            <button onClick={() => setSelectedCard(null)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-card/20 hover:bg-card/30 flex items-center justify-center transition-colors">
               <X className="w-5 h-5" />
             </button>
             <div className="space-y-3 max-w-xl">
               {bankLabel && (
-                <p className="text-xs uppercase tracking-[0.4em] text-[#064D59]/70">
+                <p className="text-xs uppercase tracking-[0.4em] text-accent-text/70">
                   {bankLabel}
                 </p>
               )}
               <h1 className="text-2xl sm:text-3xl font-bold leading-snug">
                 {selectedCard.card_name}
               </h1>
-              <p className="text-sm text-[#064D59]/80">Best card curated using your spends of ₹{(totalAnnualSpend / 100000).toFixed(2)}L annually.</p>
+              <p className="text-sm text-accent-text/80">Best card curated using your spends of ₹{(totalAnnualSpend / 100000).toFixed(2)}L annually.</p>
             </div>
             <div className="flex justify-center sm:justify-end w-full sm:w-auto">
               <img
@@ -621,7 +644,7 @@ const CardGenius = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-5">
+          <div className="bg-card rounded-3xl border border-border shadow-lg p-6 space-y-5">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">On the spends of ₹{(totalAnnualSpend / 100000).toFixed(2)}L Annually</p>
             <div className="grid sm:grid-cols-3 gap-4">
               <div>
@@ -649,12 +672,12 @@ const CardGenius = () => {
                 <p className="text-xl font-semibold text-foreground">{userDomesticLoungeVisits + userInternationalLoungeVisits}</p>
               </div>
             </div>}
-            <div className="rounded-2xl bg-[#E0F7F9] border border-[#0B7A8A] px-4 py-3 flex items-center justify-between">
+            <div className="rounded-2xl bg-surface-elevated border border-primary px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wide text-[#0B7A8A]">Your Net Savings</p>
-                <p className="text-3xl font-bold text-[#0B7A8A]">₹{Math.round(selectedCard.net_savings).toLocaleString()}</p>
+                <p className="text-xs uppercase tracking-wide text-accent-text">Your Net Savings</p>
+                <p className="text-3xl font-bold text-accent-text">₹{Math.round(selectedCard.net_savings).toLocaleString()}</p>
               </div>
-              <span className="text-xs text-[#0B7A8A]/70">per year</span>
+              <span className="text-xs text-accent-text">per year</span>
             </div>
           </div>
 
@@ -667,13 +690,13 @@ const CardGenius = () => {
             }] : [];
             const display = list.length > 0 ? list : fallbackItem;
             if (!display || display.length === 0) return null;
-            return <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-4">
+            return <div className="bg-card rounded-3xl border border-border shadow-lg p-6 space-y-4">
               <div>
                 <p className="text-xs uppercase tracking-wide text-primary">Extra benefits</p>
                 <h2 className="text-xl font-semibold text-foreground">Welcome bonuses curated for you</h2>
               </div>
               <div className="space-y-3">
-                {display.map((benefit: any, idx: number) => <div key={idx} className="flex items-start gap-3 rounded-2xl border border-[#E0F7F9] bg-[#E0F7F9]/30 p-4">
+                {display.map((benefit: any, idx: number) => <div key={idx} className="flex items-start gap-3 rounded-2xl border border-border bg-surface-elevated p-4">
                   <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-foreground">
                     On card activation you get a {benefit.voucher_of || 'benefit'}
@@ -685,7 +708,7 @@ const CardGenius = () => {
             </div>;
           })()}
 
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-6">
+          <section className="bg-card rounded-3xl border border-border shadow-lg p-6 space-y-6">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Your Total Savings Breakdown</p>
               <h2 className="text-xl font-bold text-foreground">See how each category contributes</h2>
@@ -700,7 +723,7 @@ const CardGenius = () => {
                   <button
                     key={category}
                     onClick={() => setSelectedCategory(category)}
-                    className={`px-4 sm:px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border shadow-sm inline-flex items-center justify-center whitespace-nowrap ${isActive ? 'bg-primary text-primary-foreground border-primary shadow-md' : 'bg-white text-muted-foreground border-slate-200 hover:border-primary/40'}`}
+                    className={`px-4 sm:px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border shadow-sm inline-flex items-center justify-center whitespace-nowrap ${isActive ? 'bg-primary text-primary-foreground border-primary shadow-md' : 'bg-card text-muted-foreground border-border hover:border-primary/40'}`}
                   >
                     {label}
                   </button>
@@ -710,11 +733,11 @@ const CardGenius = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-muted-foreground">Savings Breakdown</h3>
-              <div className="flex gap-2 bg-slate-100 rounded-full p-1">
-                <button onClick={() => setBreakdownView('yearly')} className={`px-4 py-1.5 rounded-full text-sm font-semibold ${breakdownView === 'yearly' ? 'bg-white shadow text-foreground' : 'text-muted-foreground'}`}>
+              <div className="flex gap-2 bg-muted rounded-full p-1">
+                <button onClick={() => setBreakdownView('yearly')} className={`px-4 py-1.5 rounded-full text-sm font-semibold ${breakdownView === 'yearly' ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}>
                   Yearly
                 </button>
-                <button onClick={() => setBreakdownView('monthly')} className={`px-4 py-1.5 rounded-full text-sm font-semibold ${breakdownView === 'monthly' ? 'bg-white shadow text-foreground' : 'text-muted-foreground'}`}>
+                <button onClick={() => setBreakdownView('monthly')} className={`px-4 py-1.5 rounded-full text-sm font-semibold ${breakdownView === 'monthly' ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}>
                   Monthly
                 </button>
               </div>
@@ -731,7 +754,7 @@ const CardGenius = () => {
               const pointsEarned = (details.points_earned || 0) * multiplier;
               const convRate = details.conv_rate || 0;
               const savings = (details.savings || 0) * multiplier;
-              return <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 space-y-4">
+              return <div className="rounded-3xl border border-border bg-muted p-6 space-y-4">
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Total Spends</span>
                   <span className="font-semibold text-foreground">₹{spend.toLocaleString()}</span>
@@ -747,11 +770,11 @@ const CardGenius = () => {
                 {pointsEarned > 0 && convRate > 0 && <div className="text-xs text-muted-foreground text-center">
                   ₹{pointsEarned.toLocaleString()} × {convRate.toFixed(2)}
                 </div>}
-                <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+                <div className="flex justify-between items-center pt-3 border-t border-border">
                   <span className="font-semibold text-foreground">Total Savings</span>
-                  <span className="text-2xl font-bold text-[#0B7A8A]">₹{Math.round(savings).toLocaleString()}</span>
+                  <span className="text-2xl font-bold text-accent-text">₹{Math.round(savings).toLocaleString()}</span>
                 </div>
-                {details.explanation && details.explanation.length > 0 && <div className="rounded-2xl bg-white border border-slate-200 p-4 space-y-2">
+                {details.explanation && details.explanation.length > 0 && <div className="rounded-2xl bg-card border border-border p-4 space-y-2">
                   <p className="text-xs uppercase tracking-wide text-primary">How it's calculated</p>
                   {details.explanation.map((exp: any, idx: number) => {
                     const text = typeof exp === 'string' ? exp : (exp?.explanation ?? exp?.text ?? exp?.description ?? '');
@@ -842,7 +865,7 @@ const CardGenius = () => {
       .map(([key]) => key);
 
     // Results list view
-    return <div className="min-h-screen bg-slate-50">
+    return <div className="min-h-screen bg-muted">
       <Navigation />
 
       <main className="section-shell max-w-6xl mx-auto pt-24 pb-16 space-y-8">
@@ -851,7 +874,7 @@ const CardGenius = () => {
           <p className="text-sm text-muted-foreground">Personalized to your spending profile</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="bg-card border border-border rounded-2xl shadow-sm p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Your Total Spends</p>
             <div className="font-bold text-foreground text-xl sm:text-2xl">
@@ -865,7 +888,7 @@ const CardGenius = () => {
           <button onClick={() => {
             setShowResults(false);
             setCurrentStep(0);
-          }} className="inline-flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-[#f0f9ff] transition-colors mx-auto sm:mx-0">
+          }} className="inline-flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-elevated transition-colors mx-auto sm:mx-0">
             Edit Spends
             <ArrowRight className="w-4 h-4" />
           </button>
@@ -883,7 +906,7 @@ const CardGenius = () => {
                 {eligibilityApplied ? "Eligibility Applied" : "Check Eligibility"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 p-6 bg-white rounded-3xl shadow-2xl border border-slate-100 z-50" align="start" sideOffset={8}>
+            <PopoverContent className="w-80 p-6 bg-card rounded-3xl shadow-2xl border border-border z-50" align="start" sideOffset={8}>
               <h3 className="font-semibold text-lg mb-4">Check Your Eligibility</h3>
               <div className="space-y-4">
                 <div>
@@ -913,8 +936,9 @@ const CardGenius = () => {
                       <SelectValue placeholder="Select employment status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="salaried">Salaried</SelectItem>
-                      <SelectItem value="self_employed">Self Employed</SelectItem>
+                      {EMP_STATUS_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -928,20 +952,20 @@ const CardGenius = () => {
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
-              className="text-xs font-semibold bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm hover:border-primary hover:text-primary transition-colors"
+              className="text-xs font-semibold bg-card border border-border px-3 py-1.5 rounded-full shadow-sm hover:border-primary hover:text-primary transition-colors"
             >
               {sortDir === 'desc' ? '↓ High to Low' : '↑ Low to High'}
             </button>
-            <div className="text-xs text-muted-foreground hidden lg:flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm">
+            <div className="text-xs text-muted-foreground hidden lg:flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-full shadow-sm">
               <span>Scroll table:</span>
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded">←</kbd>
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded">→</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border border-border rounded">←</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border border-border rounded">→</kbd>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-slate-200">
+        <div className="border-b border-border">
           <div className="flex gap-6 overflow-x-auto pb-1 scrollbar-hide">
             <button onClick={() => setActiveTab('quick')} className={`pb-3 text-sm font-semibold relative transition-colors whitespace-nowrap ${activeTab === 'quick' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
               Quick Insights
@@ -974,7 +998,7 @@ const CardGenius = () => {
             return (
               <div
                 key={card.seo_card_alias || `${card.card_name}-${index}`}
-                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_20px_45px_rgba(15,23,42,0.08)] space-y-4"
+                className="rounded-3xl border border-border bg-card p-4 shadow-[0_20px_45px_rgba(15,23,42,0.08)] space-y-4"
                 onClick={() => handleCardSelect(card)}
                 role="button"
                 tabIndex={0}
@@ -989,7 +1013,7 @@ const CardGenius = () => {
                     <p className="text-lg font-semibold text-foreground leading-tight">{card.card_name}</p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       Net Savings
-                      <span className="font-semibold text-[#0B7A8A] text-sm">
+                      <span className="font-semibold text-accent-text text-sm">
                         ₹{Math.round(card.net_savings).toLocaleString()}
                       </span>
                     </p>
@@ -1006,19 +1030,19 @@ const CardGenius = () => {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="bg-muted/40 rounded-xl p-3">
                       <p className="text-xs text-muted-foreground">Total Savings</p>
-                      <p className="text-base font-semibold text-[#0B7A8A]">
+                      <p className="text-base font-semibold text-accent-text">
                         ₹{Math.round(card.total_savings_yearly).toLocaleString()}
                       </p>
                     </div>
                     <div className="bg-muted/40 rounded-xl p-3">
                       <p className="text-xs text-muted-foreground">Milestones</p>
-                      <p className="text-base font-semibold text-[#0B7A8A]">
+                      <p className="text-base font-semibold text-accent-text">
                         ₹{Math.round(card.total_extra_benefits).toLocaleString()}
                       </p>
                     </div>
                     <div className="bg-muted/40 rounded-xl p-3">
                       <p className="text-xs text-muted-foreground">Lounge Value</p>
-                      <p className="text-base font-semibold text-[#0B7A8A]">
+                      <p className="text-base font-semibold text-accent-text">
                         {card.airport_lounge_value > 0
                           ? `₹${Math.round(card.airport_lounge_value).toLocaleString()}`
                           : '—'}
@@ -1030,7 +1054,7 @@ const CardGenius = () => {
                         {feeCalc(card.joining_fee_text).display}
                       </p>
                       {feeCalc(card.joining_fee_text).tooltip && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                           {feeCalc(card.joining_fee_text).tooltip}
                         </div>
                       )}
@@ -1048,7 +1072,7 @@ const CardGenius = () => {
 
                 <div className="flex flex-wrap gap-2">
                   {card.joining_fees === 0 && card.annual_fees === 0 && (
-                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-[#E0F7F9] text-[#0B7A8A]">
+                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-surface-elevated text-accent-text">
                       Lifetime Free
                     </span>
                   )}
@@ -1086,17 +1110,17 @@ const CardGenius = () => {
         <div className="block w-full overflow-x-auto">
           <div className="mx-auto w-full max-w-full">
             <TooltipProvider>
-              <div className="relative bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+              <div className="relative bg-card rounded-3xl border border-border shadow-xl overflow-hidden">
                 {/* Scroll hint indicator */}
                 <div className="bg-gradient-to-r from-transparent via-muted/20 to-transparent h-1"></div>
 
                 {/* Left Scroll Button */}
-                {showLeftScroll && <button onClick={() => handleScroll('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-30 bg-white/95 hover:bg-white border border-border rounded-full p-2 shadow-lg transition-all hover:scale-110 animate-fade-in" aria-label="Scroll left">
+                {showLeftScroll && <button onClick={() => handleScroll('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-30 bg-card/95 hover:bg-card border border-border rounded-full p-2 shadow-lg transition-all hover:scale-110 animate-fade-in" aria-label="Scroll left">
                   <ArrowLeft className="w-5 h-5 text-foreground" />
                 </button>}
 
                 {/* Right Scroll Button */}
-                {showRightScroll && <button onClick={() => handleScroll('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-white/95 hover:bg-white border border-border rounded-full p-2 shadow-lg transition-all hover:scale-110 animate-fade-in" aria-label="Scroll right">
+                {showRightScroll && <button onClick={() => handleScroll('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-card/95 hover:bg-card border border-border rounded-full p-2 shadow-lg transition-all hover:scale-110 animate-fade-in" aria-label="Scroll right">
                   <ArrowRight className="w-5 h-5 text-foreground" />
                 </button>}
 
@@ -1105,7 +1129,7 @@ const CardGenius = () => {
                     <thead className="bg-muted/50">
                       <tr>
                         <th className="text-center p-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground w-10">#</th>
-                        <th className="text-left p-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground sticky left-0 bg-white z-20 min-w-[260px]">Credit Cards</th>
+                        <th className="text-left p-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground sticky left-0 bg-card z-20 min-w-[260px]">Credit Cards</th>
 
                         {/* Quick Insights Tab - Show summary columns */}
                         {activeTab === 'quick' && <>
@@ -1411,11 +1435,11 @@ const CardGenius = () => {
                     </thead>
                     <tbody>
                       {sortedResults.map((card, index) => {
-                        return <tr key={index} className={`border-t border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer ${index === 0 ? 'bg-[#E0F7F9]/60' : 'bg-white'}`} onClick={() => handleCardSelect(card)}>
+                        return <tr key={index} className={`border-t border-border hover:bg-accent transition-colors cursor-pointer ${index === 0 ? 'bg-surface-elevated' : 'bg-card'}`} onClick={() => handleCardSelect(card)}>
                           <td className="p-3 text-center text-sm font-bold text-muted-foreground w-10">{index + 1}</td>
-                          <td className="p-3 sticky left-0 bg-white z-20 min-w-[260px] shadow-[4px_0_6px_-4px_rgba(15,23,42,0.08)]">
+                          <td className="p-3 sticky left-0 bg-card z-20 min-w-[260px] shadow-[4px_0_6px_-4px_rgba(15,23,42,0.08)]">
                             <div className="flex items-center gap-4">
-                              <img src={card.card_bg_image} alt={card.card_name} className="w-16 h-12 object-contain flex-shrink-0 rounded-md border border-slate-100" onError={e => {
+                              <img src={card.card_bg_image} alt={card.card_name} className="w-16 h-12 object-contain flex-shrink-0 rounded-md border border-border" onError={e => {
                                 e.currentTarget.src = "/placeholder.svg";
                               }} />
                               <div className="min-w-0">
@@ -1427,15 +1451,15 @@ const CardGenius = () => {
 
                           {/* Quick Insights Tab - Show summary data */}
                           {activeTab === 'quick' && <>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               ₹{card.total_savings_yearly.toLocaleString()}
                             </td>
                             <td className="p-4"></td>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               ₹{card.total_extra_benefits.toLocaleString()}
                             </td>
                             <td className="p-4"></td>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               {card.airport_lounge_value && card.airport_lounge_value > 0
                                 ? `₹${card.airport_lounge_value.toLocaleString()}`
                                 : '—'}
@@ -1444,14 +1468,14 @@ const CardGenius = () => {
                             <td className="p-4 text-center font-semibold text-red-600 relative group cursor-default">
                               {feeCalc(card.joining_fee_text).display}
                               {feeCalc(card.joining_fee_text).tooltip && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                                   {feeCalc(card.joining_fee_text).tooltip}
                                 </div>
                               )}
                             </td>
                             <td className="p-4"></td>
                             <td className="p-4 text-center">
-                              <span className="font-bold text-lg text-[#0B7A8A]">
+                              <span className="font-bold text-lg text-accent-text">
                                 ₹{card.net_savings.toLocaleString()}
                               </span>
                             </td>
@@ -1463,7 +1487,7 @@ const CardGenius = () => {
                               const breakdown = card.spending_breakdown[category];
                               const yearlySavings = breakdown?.savings ? breakdown.savings * 12 : 0;
                               return <React.Fragment key={category}>
-                                <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                                <td className="p-4 text-center font-semibold text-accent-text">
                                   ₹{yearlySavings.toLocaleString()}
                                 </td>
                                 {idx < spendingCategories.length - 1 && <td className="p-4"></td>}
@@ -1474,28 +1498,28 @@ const CardGenius = () => {
                             {(domesticLoungeValue > 0 || internationalLoungeValue > 0) && <>
                               {domesticLoungeValue > 0 && <>
                                 <td className="p-4"></td>
-                                <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                                <td className="p-4 text-center font-semibold text-accent-text">
                                   ₹{(card.domestic_lounge_value || 0).toLocaleString()}
                                 </td>
                               </>}
                               {internationalLoungeValue > 0 && <>
                                 <td className="p-4"></td>
-                                <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                                <td className="p-4 text-center font-semibold text-accent-text">
                                   ₹{(card.international_lounge_value || 0).toLocaleString()}
                                 </td>
                               </>}
                             </>}
 
                             <td className="p-4"></td>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               ₹{card.total_savings_yearly.toLocaleString()}
                             </td>
                             <td className="p-4"></td>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               ₹{card.total_extra_benefits.toLocaleString()}
                             </td>
                             <td className="p-4"></td>
-                            <td className="p-4 text-center font-semibold text-[#0B7A8A]">
+                            <td className="p-4 text-center font-semibold text-accent-text">
                               {card.airport_lounge_value && card.airport_lounge_value > 0
                                 ? `₹${card.airport_lounge_value.toLocaleString()}`
                                 : '—'}
@@ -1504,14 +1528,14 @@ const CardGenius = () => {
                             <td className="p-4 text-center font-semibold text-red-600 relative group cursor-default">
                               {feeCalc(card.joining_fee_text).display}
                               {feeCalc(card.joining_fee_text).tooltip && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 bg-card text-primary-foreground text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none">
                                   {feeCalc(card.joining_fee_text).tooltip}
                                 </div>
                               )}
                             </td>
                             <td className="p-4"></td>
                             <td className="p-4 text-center">
-                              <span className="font-bold text-lg text-[#0B7A8A]">
+                              <span className="font-bold text-lg text-accent-text">
                                 ₹{card.net_savings.toLocaleString()}
                               </span>
                             </td>
@@ -1546,7 +1570,7 @@ const CardGenius = () => {
   }
   return <>
     <Navigation />
-    <div className="min-h-screen bg-gradient-to-b from-white to-[#E0F7F9] pt-32 md:pt-36">{/* Added padding for nav + progress bar */}
+    <div className="min-h-screen bg-gradient-to-b from-background to-surface-elevated pt-32 md:pt-36">{/* Added padding for nav + progress bar */}
       {/* Welcome Dialog */}
       <Dialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
         <DialogContent className="sm:max-w-lg w-[92vw] sm:w-auto max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8">
@@ -1557,46 +1581,46 @@ const CardGenius = () => {
 
           <div className="flex flex-col items-center text-center space-y-4 pt-4 sm:pt-6">
             {/* <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-[#d4ecff] to-accent/20 flex items-center justify-center mb-2">
-              <img src={logo} alt="Card Genius 360" className="w-16 h-16 sm:w-24 sm:h-24 object-contain" />
+              <Sparkles className="w-16 h-16 sm:w-24 sm:h-24 text-accent-text" aria-hidden="true" />
             </div> */}
 
             <DialogHeader className="space-y-3">
-              <DialogTitle className="text-2xl sm:text-3xl font-bold bg-gradient-accent bg-clip-text text-transparent">
+              <DialogTitle className="text-2xl sm:text-3xl font-bold bg-gradient-heading bg-clip-text text-transparent">
                 Welcome to Super Card Genius
               </DialogTitle>
-              <DialogDescription className="text-sm sm:text-base text-charcoal-700 leading-relaxed">
+              <DialogDescription className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                 We help you find the <span className="font-semibold text-primary">best credit card</span> tailored to your unique spending habits.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="w-full bg-[#f0f9ff] rounded-xl p-6 space-y-3 text-left">
+            <div className="w-full bg-surface-elevated rounded-xl p-6 space-y-3 text-left">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#E0F7F9] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-charcoal-900">Personalized Recommendations</h4>
-                  <p className="text-sm text-charcoal-600">Answer a few quick questions about your spending</p>
+                  <h4 className="font-semibold text-foreground">Personalized Recommendations</h4>
+                  <p className="text-sm text-muted-foreground">Answer a few quick questions about your spending</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#E0F7F9] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Check className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-charcoal-900">Smart Analysis</h4>
-                  <p className="text-sm text-charcoal-600">Get cards ranked by maximum savings and benefits</p>
+                  <h4 className="font-semibold text-foreground">Smart Analysis</h4>
+                  <p className="text-sm text-muted-foreground">Get cards ranked by maximum savings and benefits</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#E0F7F9] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center flex-shrink-0 mt-0.5">
                   <TrendingUp className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-charcoal-900">Maximize Your Savings</h4>
-                  <p className="text-sm text-charcoal-600">Discover how much you can save annually</p>
+                  <h4 className="font-semibold text-foreground">Maximize Your Savings</h4>
+                  <p className="text-sm text-muted-foreground">Discover how much you can save annually</p>
                 </div>
               </div>
             </div>
@@ -1611,16 +1635,16 @@ const CardGenius = () => {
 
       {/* Loading State */}
       {isCalculating && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
+        <div className="bg-card rounded-2xl p-8 max-w-md mx-4 text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
-          <h3 className="text-xl font-bold text-charcoal-900 mb-2">
+          <h3 className="text-xl font-bold text-foreground mb-2">
             Finding Your Perfect Cards...
           </h3>
-          <p className="text-charcoal-600 mb-4">
+          <p className="text-muted-foreground mb-4">
             This will just take a moment
           </p>
-          <div className="bg-[#E0F7F9] p-4 rounded-lg">
-            <p className="text-sm text-charcoal-700 italic">
+          <div className="bg-surface-elevated p-4 rounded-lg">
+            <p className="text-sm text-muted-foreground italic">
               💡 {funFacts[currentFactIndex]}
             </p>
           </div>
@@ -1632,10 +1656,10 @@ const CardGenius = () => {
         <div className="max-w-2xl mx-auto">
           {/* Welcome Message */}
           {currentStep === 0 && <div className="mb-8 text-center animate-fade-in px-4">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-charcoal-900 mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
               Let's Find Your Perfect Card
             </h1>
-            <p className="text-base sm:text-lg md:text-xl text-charcoal-700">
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground">
               Answer {questions.length} quick questions about your spending habits, and we'll recommend the best cards for you.
             </p>
           </div>}
@@ -1644,7 +1668,7 @@ const CardGenius = () => {
           <div className="mb-4 rounded-2xl border border-border bg-card/90 shadow-[0_8px_30px_rgb(0,0,0,0.05)] p-4 flex items-center justify-between flex-wrap gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-primary flex items-center gap-1">
-                <span className="w-6 h-6 rounded-full bg-[#E0F7F9] flex items-center justify-center text-primary text-sm font-bold">
+                <span className="w-6 h-6 rounded-full bg-surface-elevated flex items-center justify-center text-primary text-sm font-bold">
                   {currentStep + 1}
                 </span>
                 of {questions.length}
@@ -1722,7 +1746,7 @@ const CardGenius = () => {
           <div className="text-center mt-6">
             <button
               onClick={handleNext}
-              className="text-charcoal-500 hover:text-primary font-medium transition-colors cg-skip-question-link"
+              className="text-muted-foreground hover:text-primary font-medium transition-colors cg-skip-question-link"
               aria-label="Skip this question"
             >
               Skip this question →

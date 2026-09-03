@@ -1,84 +1,79 @@
-# BankkaroTide Frontend
+# Banxx
 
-A whitelabel credit card comparison and recommendation platform built with Next.js. Can be branded for any partner via environment variables.
+Credit card eligibility and comparison for **Banxx** (`banxx.bankkaro.com`),
+partner entity **Credit Links**. Built on the BankKaro CardGenius whitelabel
+shell, Next.js App Router.
 
-## Quick Start
+Users arriving from a Credit Links affiliate link have their eligibility
+hydrated from the URL and land straight on filtered results. Everyone else gets
+the standard three-field eligibility form.
+
+## Quick start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
+cp .env.example .env.local   # then fill in PARTNER_API_KEY
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000
 
-## Environment Setup
+## Commands
 
-Copy the example below into a `.env` file in the project root (never commit this file):
+| Command | What it does |
+|---|---|
+| `npm run dev` | Local dev server |
+| `npm run build` | Production build |
+| `npm run test` | Vitest suite |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | `next lint` |
 
-```env
-# Brand / whitelabel
-NEXT_PUBLIC_BRAND_NAME=YourBrand Cards
-NEXT_PUBLIC_BRAND_TAGLINE=Find Your Perfect Credit Card
-NEXT_PUBLIC_BRAND_EMAIL=support@yourbrand.com
-NEXT_PUBLIC_BRAND_LOGO=/logo.png
+## Configuration
 
-# Theme colors (hex or hsl)
-NEXT_PUBLIC_PRIMARY_COLOR=#2563eb
-NEXT_PUBLIC_SECONDARY_COLOR=#7c3aed
+See **[BANXX_SETUP.md](./BANXX_SETUP.md)** for the full deployment guide: the
+two launch-blocking env vars, the `/api/health` config check, the partner entry
+URL contract, the income-unit decision, and the theming and accessibility
+rules.
 
-# Partner API
-PARTNER_API_KEY=your_api_key_here
-PARTNER_TOKEN_URL=https://your-token-endpoint.com/token
+`.env.example` documents every variable. Colour is **not** configured by env: it
+lives as design tokens in `src/app/globals.css`.
 
-# Analytics (optional)
-NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
-```
-
-## Whitelabel Configuration
-
-1. Add your `logo.png` and `favicon.png` to the `public/` folder.
-2. Set `NEXT_PUBLIC_*` variables in `.env` for your brand.
-3. Each partner deployment gets its own Vercel project pointing to the same repo, with different environment variables.
-
-## Features
-
-- **Card Genius** — AI-powered card recommendations based on monthly spending
-- **Category Card Genius** — Best cards for a specific spending category
-- **Beat My Card** — Compare your current card against smarter alternatives
-- **Card Listing** — Browse and filter 100+ credit cards with GST-inclusive fee display
-- **Card Details** — Full breakdown of benefits, fees, and rewards
-- **Card Comparison** — Side-by-side comparison of up to 3 cards
-
-## Tech Stack
-
-- **Next.js 15** (App Router)
-- **TypeScript**
-- **Tailwind CSS**
-- **shadcn/ui**
-
-## Project Structure
+## Layout
 
 ```
 src/
-├── app/               # Next.js App Router pages
-├── components/        # Shared UI components
-│   └── comparison/    # Card comparison panel
-├── config/
-│   └── brand.config.ts  # Central brand/theme config
-├── lib/
-│   ├── cardGenius.ts  # Card Genius recommendation engine
-│   └── feeUtils.ts    # GST-inclusive fee calculations
-├── services/          # API calls (card data, auth)
-├── utils/
-│   └── redirectHandler.ts  # Card application redirect logic
-└── views/             # Page-level view components
+  app/                  App Router routes and API routes
+    api/health/         Deployment config check (run before announcing a deploy)
+    api/token/          Partner JWT proxy, origin-allowlisted
+    api/proxy/          Partner API passthrough
+  lib/
+    eligibilityParams   Shared validators. One source of truth for pincode,
+                        income and employment rules, used by the URL adapter
+                        AND every form surface.
+    hydration           Credit Links URL parameter adapter
+    attribution         Session-durable p2/p3/utm store
+    outboundUrl         Apply-URL construction and the placeholder guard
+    eligibilityStore    Session-scoped eligibility basis
+  views/
+    BanxxHome           Root route: results for a partner arrival, else landing
+    BanxxLanding        Landing page
+    CardListing         Eligibility form, hydration target, results
+  components/
+    EligibilityChips    Editable eligibility basis shown above results
+    BrandWordmark       The only place the logo asset is referenced
 ```
 
-## Deployment (Vercel)
+## Things worth knowing before you change something
 
-1. Connect this repo to a new Vercel project.
-2. Go to **Project Settings → Environment Variables** and add all `NEXT_PUBLIC_*` and `PARTNER_*` variables.
-3. Deploy. Each brand/partner gets its own Vercel project.
+- **The eligibility API takes monthly rupees, not annual.** `toBreIncome()` is
+  an identity function on purpose, with a test that fails if a 12x appears.
+- **`empStatus` on the wire is `self_employed`, with an underscore.** The
+  hyphenated form Credit Links sends is accepted as input and never emitted.
+- **A failed URL parameter is never defaulted.** It is absent from the
+  hydration result, which makes the rule a property of the return type.
+- **`cardgenius/cards` does not filter by eligibility.** Only `slug` and
+  `sort_by` reach the network. Eligibility filtering is client-side by alias.
+- **Indigo is a fill colour in dark mode, never text.** Use `text-accent-text`,
+  which resolves to indigo-300 in dark mode. See BANXX_SETUP.md.
+- **Every outbound apply URL is asserted placeholder-free before navigation.**
+  A previous deployment shipped live `{click_id}` in production redirects.

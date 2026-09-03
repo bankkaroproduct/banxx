@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ALLOWED_ORIGINS, normalizeOrigin } from '@/lib/allowedOrigins';
 
 // NOTE: This is a basic development-only rate limiter.
 // For production, replace with a proper solution such as:
@@ -15,16 +16,6 @@ declare global {
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10;
 
-const ALLOWED_ORIGINS = [
-    process.env.NEXT_PUBLIC_APP_URL,
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'https://bankkaro.com',
-    'https://niraj-dugar-partner.vercel.app',
-    'https://niraj-dugar-partner-bankkaroproducts-projects.vercel.app',
-].filter(Boolean) as string[];
-
 export async function POST(request: NextRequest) {
     // --- CSRF origin check (production only) ---
     if (process.env.NODE_ENV === 'production') {
@@ -32,7 +23,15 @@ export async function POST(request: NextRequest) {
         const referer = request.headers.get('referer');
         const requestOrigin = origin ?? (referer ? (() => { try { return new URL(referer).origin; } catch { return null; } })() : null);
 
-        if (!requestOrigin || !ALLOWED_ORIGINS.some(o => requestOrigin === o)) {
+        const normalized = normalizeOrigin(requestOrigin);
+        if (!normalized || !ALLOWED_ORIGINS.includes(normalized)) {
+            // Log the mismatch: a silent 403 here is indistinguishable from an
+            // app that simply fails to load.
+            console.error('[token] 403 origin not allowed', {
+                received: normalized ?? requestOrigin ?? null,
+                allowed: ALLOWED_ORIGINS,
+                appUrlConfigured: Boolean(process.env.NEXT_PUBLIC_APP_URL),
+            });
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
     }

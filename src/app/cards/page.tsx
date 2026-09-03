@@ -4,7 +4,6 @@ import CardListing from "@/views/CardListing";
 
 export const metadata: Metadata = {
   robots: 'noindex, nofollow',
-  alternates: { canonical: 'https://great.cards/credit-card-store' },
 };
 
 export default function CardsPage() {

@@ -43,7 +43,7 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
 
   useEffect(() => {
     if (!open || allCards.length > 0) return;
-    cardService.getCardListing({ slug: '', banks_ids: [], card_networks: [], annualFees: '', credit_score: '', sort_by: '', free_cards: '', eligiblityPayload: {}, cardGeniusPayload: [] })
+    cardService.getCardListing({})
       .then(response => setAllCards(response.data?.cards || response.data?.data || []))
       .catch(console.error);
   }, [open, allCards.length]);
@@ -284,7 +284,7 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
     
     if (row.type === 'rating') return <div className="flex items-center gap-1"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" /><span className="font-semibold">{value}</span></div>;
     if (row.type === 'usps') return <div className="space-y-2">{(Array.isArray(value) ? value : []).sort((a: any, b: any) => a.priority - b.priority).map((usp: any, idx: number) => (<div key={idx} className="p-2 bg-muted/50 rounded-lg"><div className="font-semibold text-sm mb-1">{usp.header}</div><div className="text-xs text-muted-foreground">{usp.description}</div></div>))}</div>;
-    if (row.type === 'tags') return <div className="flex flex-wrap gap-2">{(Array.isArray(value) ? value : []).map((t: any) => <span key={t.id || t.name} className="px-2 py-1 rounded-full bg-[#E0F7F9] text-primary border border-[#0B7A8A]/20 text-xs font-medium">{t.name}</span>)}</div>;
+    if (row.type === 'tags') return <div className="flex flex-wrap gap-2">{(Array.isArray(value) ? value : []).map((t: any) => <span key={t.id || t.name} className="px-2 py-1 rounded-full bg-surface-elevated text-primary border border-primary text-xs font-medium">{t.name}</span>)}</div>;
     if (row.type === 'list') return <ul className="list-disc list-inside space-y-1 text-sm">{value.split(',').map((item: string) => item.trim()).filter(Boolean).map((item: string, idx: number) => <li key={idx}>{item}</li>)}</ul>;
     if (row.type === 'link') return <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">View Catalogue <ExternalLink className="w-3 h-3" /></a>;
     if (row.type === 'html') {

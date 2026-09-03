@@ -48,14 +48,14 @@ export default function EligibilityResultDialog({
           angle: 60,
           spread: 55,
           origin: { x: 0 },
-          colors: ['#0B7A8A', '#E0F7F9', '#60A5FA', '#085F6D']
+          colors: ['#6A35FF', '#9B7BFF', '#F4F2FF', '#5A2BE0']
         });
         confetti({
           particleCount: 2,
           angle: 120,
           spread: 55,
           origin: { x: 1 },
-          colors: ['#0B7A8A', '#E0F7F9', '#60A5FA', '#085F6D']
+          colors: ['#6A35FF', '#9B7BFF', '#F4F2FF', '#5A2BE0']
         });
 
         if (Date.now() < end) {
@@ -148,10 +148,10 @@ export default function EligibilityResultDialog({
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 rounded-full bg-[#E0F7F9]/10 flex items-center justify-center">
-                <CheckCircle className="w-7 h-7 text-[#0B7A8A]" />
+              <div className="w-12 h-12 rounded-full bg-surface-elevated flex items-center justify-center">
+                <CheckCircle className="w-7 h-7 text-accent-text" />
               </div>
-              <DialogTitle className="text-2xl text-[#0B7A8A]">
+              <DialogTitle className="text-2xl text-accent-text">
                 You're eligible! 🎉
               </DialogTitle>
             </div>
@@ -165,19 +165,19 @@ export default function EligibilityResultDialog({
               <h3 className="font-semibold text-foreground mb-3">Matched Criteria</h3>
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-[#0B7A8A] mt-0.5 flex-shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-accent-text mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">Location:</span> Your pincode is supported
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-[#0B7A8A] mt-0.5 flex-shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-accent-text mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">Income:</span> Meets minimum requirement
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-[#0B7A8A] mt-0.5 flex-shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-accent-text mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">Employment:</span> Eligible status
                   </p>
