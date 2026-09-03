@@ -4,6 +4,7 @@ import React from "react";
 import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { extractEligibleAliases } from '@/services/cardService';
 import { CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { openRedirectInterstitial } from '@/utils/redirectHandler';
@@ -30,10 +31,20 @@ export default function EligibilityResultDialog({
 }: EligibilityResultDialogProps) {
   const router = useRouter();
 
-  // /cg-eligibility returns data: [{seo_card_alias, eligible, ...}]
+  // /cg-eligiblity returns data: [{seo_card_alias, eligible, ...}]
+  //
+  // The authoritative signal is `eligible === true` on the matched card, which
+  // is what every other call site uses (see extractEligibleAliases). This
+  // previously also required `result.status === 'success'` as a string, while
+  // the listing, the Card Genius popover and the submit handler all treat
+  // `status` as merely truthy. If the API returns `status: true` rather than
+  // the string, that strict check made an eligible user see "not eligible" and
+  // suppressed the apply CTA entirely, so the click-out never happened.
+  // `result` is only ever set after a successful response, so request success
+  // is already established by the time this renders.
   const cards: any[] = Array.isArray(result?.data) ? result.data : [];
   const matchedCard = cards.find((c: any) => (c?.seo_card_alias || c?.card_alias) === cardAlias) ?? null;
-  const isEligible = result?.status === 'success' && matchedCard?.eligible === true;
+  const isEligible = extractEligibleAliases(result ?? {}).includes(cardAlias);
   const hasData = result !== null && result !== undefined;
 
   useEffect(() => {
