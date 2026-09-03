@@ -5,8 +5,14 @@ import type { EmpStatus } from '@/lib/eligibilityParams';
 // on the external platform.bankkaro.com domain.
 const BASE_URL = '/api/proxy';
 
-/** Eligibility API. Called directly, not via the partner proxy. */
-const ELIGIBILITY_URL = 'https://bk-prod-external.bankkaro.com/sp/api/cg-eligiblity';
+/**
+ * Eligibility API. Routed through the Next server (/api/eligibility) rather than
+ * called directly: the upstream host (bk-prod-external.bankkaro.com) does not
+ * send CORS headers for every origin, so a direct browser call fails on
+ * localhost and any origin it hasn't allow-listed. The server-to-server hop has
+ * no CORS. See src/app/api/eligibility/route.ts.
+ */
+const ELIGIBILITY_URL = '/api/eligibility';
 
 export interface EligibilityCard {
   seo_card_alias?: string;

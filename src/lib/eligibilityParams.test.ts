@@ -127,6 +127,15 @@ describe('normalizeEmpStatus', () => {
     expect(result.value).not.toBe('self-employed');
   });
 
+  it('accepts the partner short codes s and se', () => {
+    for (const input of ['s', 'S', ' s ']) {
+      expect(normalizeEmpStatus(input), input).toEqual({ ok: true, value: 'salaried' });
+    }
+    for (const input of ['se', 'SE', ' se ']) {
+      expect(normalizeEmpStatus(input), input).toEqual({ ok: true, value: 'self_employed' });
+    }
+  });
+
   // Spec test case 6.
   it('leaves an unknown value unresolved rather than guessing', () => {
     for (const input of ['student', 'retired', 'freelance', 'business']) {

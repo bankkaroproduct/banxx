@@ -91,19 +91,21 @@ export const normalizeMonthlySalary = (raw: string | null | undefined): Resoluti
 /**
  * Normalise an employment status to the value the eligibility API accepts.
  *
- * Accepts the hyphenated form Credit Links sends ("self-employed") plus the
- * spaced, underscored and concatenated variants, in any case. Only ever EMITS
- * the underscore form `self_employed`, which is what every existing call site
- * sends and what the API matches on. Emitting the hyphen would silently break
- * employment matching while still returning a plausible-looking card set.
+ * Accepts the partner short codes `s` (salaried) and `se` (self-employed) — the
+ * format Credit Links documents in its entry URL spec — plus the hyphenated
+ * form ("self-employed") and the spaced, underscored and concatenated variants,
+ * in any case. Only ever EMITS the underscore form `self_employed`, which is
+ * what every existing call site sends and what the API matches on. Emitting the
+ * hyphen would silently break employment matching while still returning a
+ * plausible-looking card set.
  */
 export const normalizeEmpStatus = (raw: string | null | undefined): Resolution<EmpStatus> => {
   const value = (raw ?? '').trim();
   if (!value) return { ok: false, reason: 'missing' };
 
   const key = value.toLowerCase().replace(/[^a-z]/g, '');
-  if (key === 'salaried') return { ok: true, value: 'salaried' };
-  if (key === 'selfemployed') return { ok: true, value: 'self_employed' };
+  if (key === 'salaried' || key === 's') return { ok: true, value: 'salaried' };
+  if (key === 'selfemployed' || key === 'se') return { ok: true, value: 'self_employed' };
 
   return { ok: false, reason: 'unknown_enum' };
 };

@@ -131,6 +131,7 @@ const CardListing = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [cards, setCards] = useState<any[]>([]);
+  const [bankIdToName, setBankIdToName] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [displayCount, setDisplayCount] = useState(12);
@@ -160,6 +161,7 @@ const CardListing = () => {
   // Filters - sort_by will be sent to API
   const [filters, setFilters] = useState({
     banks_ids: [] as number[],
+    bank_names: [] as string[],
     card_networks: [] as string[],
     annualFees: "",
     credit_score: "",
@@ -210,6 +212,29 @@ const CardListing = () => {
     return () => {
       abortControllerRef.current?.abort();
     };
+  }, []);
+
+  // Load the bank_id -> name map once. The /cardgenius/cards listing only
+  // carries a numeric bank_id, so the Bank filter resolves names from the
+  // init-bundle's bank_data.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const bundle = await cardService.getInitBundle();
+        const banks = bundle?.data?.bank_data ?? bundle?.bank_data ?? [];
+        if (cancelled || !Array.isArray(banks)) return;
+        const map: Record<string, string> = {};
+        for (const b of banks) {
+          const name = (b?.name || '').trim();
+          if (b?.id != null && name) map[String(b.id)] = name;
+        }
+        setBankIdToName(map);
+      } catch {
+        // Non-fatal: the Bank filter simply stays hidden if the map fails to load.
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Discover page view (fires once on mount)
@@ -410,6 +435,22 @@ const CardListing = () => {
     return [...cards].sort(compareCardsByPriority);
   }, [cards, filters.category]);
 
+  // Resolve a card's bank name from its numeric bank_id via the init-bundle map,
+  // falling back to any embedded banks.name if the API shape ever changes.
+  const getCardBankName = (card: any): string =>
+    (bankIdToName[String(card?.bank_id)] || card?.banks?.name || '').trim();
+
+  // Distinct bank names present in the current listing, for the Bank filter.
+  const availableBanks = useMemo(() => {
+    if (!Array.isArray(cards)) return [] as string[];
+    const names = new Set<string>();
+    for (const card of cards) {
+      const name = getCardBankName(card);
+      if (name) names.add(name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [cards, bankIdToName]);
+
   const filteredCards = useMemo(() => {
     // 1) Apply search filter
     let base = sortedCards.filter(card => {
@@ -421,6 +462,12 @@ const CardListing = () => {
       const benefits = (card.benefits || '').toLowerCase();
       return cardName.includes(query) || bankName.includes(query) || cardType.includes(query) || benefits.includes(query);
     });
+
+    // 1b) Apply bank filter (client-side, by bank name)
+    if (filters.bank_names.length > 0) {
+      const wanted = new Set(filters.bank_names.map(n => n.toLowerCase()));
+      base = base.filter(card => wanted.has(getCardBankName(card).toLowerCase()));
+    }
 
     // 2) Filter out cards with zero savings when a category is active and savings data is loaded
     if (filters.category !== 'all') {
@@ -444,7 +491,7 @@ const CardListing = () => {
     }
 
     return base;
-  }, [sortedCards, searchQuery, eligibilitySubmitted, eligibleCardAliases, filters.category, cardSavings]);
+  }, [sortedCards, searchQuery, eligibilitySubmitted, eligibleCardAliases, filters.category, filters.bank_names, bankIdToName, cardSavings]);
   const loadMore = () => {
     trackListingLoadMoreClicked();
     setIsLoadingMore(true);
@@ -508,6 +555,7 @@ const CardListing = () => {
     syncCategoryParam('all');
     setFilters({
       banks_ids: [],
+      bank_names: [],
       card_networks: [],
       annualFees: "",
       credit_score: "",
@@ -930,6 +978,31 @@ const CardListing = () => {
         </CollapsibleContent>
        </Collapsible> */}
 
+    {/* Bank - Collapsed by default. Options are derived from the loaded cards. */}
+    {availableBanks.length > 0 && (
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 hover:bg-muted/30 rounded-lg transition-colors text-left font-semibold touch-target">
+        <h3 className="font-semibold">Bank</h3>
+        <ChevronDown className="w-4 h-4 transition-transform ui-expanded:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 space-y-2 pl-1 max-h-72 overflow-y-auto">
+        {availableBanks.map(bank => <label key={bank} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
+          <input type="checkbox" className="accent-primary w-5 h-5" checked={filters.bank_names.includes(bank)} onChange={e => {
+            if (e.target.checked) {
+              trackListingFiltersSelected('bank', bank);
+            }
+            setFilters((prev: any) => ({
+              ...prev,
+              bank_names: e.target.checked ? [...prev.bank_names, bank] : prev.bank_names.filter((b: string) => b !== bank)
+            }));
+            setDisplayCount(12);
+          }} />
+          <span className="text-sm flex-1">{bank}</span>
+        </label>)}
+      </CollapsibleContent>
+    </Collapsible>
+    )}
+
     {/* Card Network - Collapsed by default */}
     <Collapsible defaultOpen={false}>
       <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 hover:bg-muted/30 rounded-lg transition-colors text-left font-semibold touch-target">
@@ -1232,7 +1305,7 @@ const CardListing = () => {
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground">{filteredCards.length}</span> cards found
                 </p>
-                {(filters.category !== 'all' || filters.card_networks.length > 0 || filters.annualFees || eligibilitySubmitted) && (
+                {(filters.category !== 'all' || filters.bank_names.length > 0 || filters.card_networks.length > 0 || filters.annualFees || eligibilitySubmitted) && (
                   <button
                     onClick={clearFilters}
                     className="text-xs text-accent-text hover:text-primary-hover font-semibold"
@@ -1277,7 +1350,7 @@ const CardListing = () => {
             </div>
 
             {/* Active Filters */}
-            {(filters.category !== 'all' || filters.card_networks.length > 0 || filters.free_cards || filters.annualFees || filters.credit_score || eligibilitySubmitted || geniusSpendingData || searchQuery) && <div className="mb-4 flex flex-wrap gap-2">
+            {(filters.category !== 'all' || filters.bank_names.length > 0 || filters.card_networks.length > 0 || filters.free_cards || filters.annualFees || filters.credit_score || eligibilitySubmitted || geniusSpendingData || searchQuery) && <div className="mb-4 flex flex-wrap gap-2">
               {searchQuery && <Badge variant="secondary" className="gap-2">
                 Search: {searchQuery}
                 <X className="w-3 h-3 cursor-pointer" onClick={() => {
@@ -1300,6 +1373,17 @@ const CardListing = () => {
                 })()}
                 <X className="w-3 h-3 cursor-pointer" onClick={() => handleFilterChange('category', 'all')} />
               </Badge>}
+              {filters.bank_names.map(bank => (
+                <Badge key={bank} variant="secondary" className="gap-2">
+                  {bank}
+                  <X className="w-3 h-3 cursor-pointer" onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      bank_names: prev.bank_names.filter(b => b !== bank)
+                    }));
+                  }} />
+                </Badge>
+              ))}
               {filters.card_networks.map(network => (
                 <Badge key={network} variant="secondary" className="gap-2">
                   {network === 'AmericanExpress' ? 'American Express' : network}
