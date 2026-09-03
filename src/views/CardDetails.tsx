@@ -1,0 +1,989 @@
+﻿"use client";
+import { useEffect, useState, useRef } from 'react';
+import { analytics } from '@/services/analytics';
+import {
+  trackCardDetailsPageView,
+  trackCardDetailsBackClicked,
+  trackCardDetailsBreadcrumbClicked,
+  trackCardDetailsBenefitsViewed,
+  trackCardDetailsApplyNowClicked,
+  trackCardDetailsCheckEligibilityClicked,
+  trackCardDetailsCompareClicked,
+} from '@/services/journeyTrack';
+import { useParams, useRouter } from 'next/navigation';
+import { Link } from '@/components/Link';
+import { cardService } from '@/services/cardService';
+import Navigation from '@/components/Navigation';
+import Footer from '@/components/Footer';
+import { Star, ChevronDown, ChevronUp, ExternalLink, Gift, Award, Sparkles, ArrowLeft, Shield, Plus, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { toast } from 'sonner';
+import EligibilityDialog from '@/components/EligibilityDialog';
+import { sanitizeHtml } from '@/lib/sanitize';
+import { feeCalc } from '@/lib/feeUtils';
+import { redirectToCardApplication } from '@/utils/redirectHandler';
+import { getCardStatus, canApply } from '@/utils/cardStatus';
+import { CompareToggleIcon } from '@/components/comparison/CompareToggleIcon';
+import { ComparePanel } from '@/components/comparison/ComparePanel';
+import { useComparison } from '@/contexts/ComparisonContext';
+
+interface CardData {
+  id: number;
+  name: string;
+  nick_name: string;
+  seo_card_alias: string;
+  card_type: string;
+  rating: number;
+  user_rating_count: number;
+  image: string;
+  card_bg_image: string;
+  card_bg_gradient: string;
+  card_apply_link: string;
+  age_criteria: string;
+  min_age: number;
+  max_age: number;
+  crif: string;
+  income: string;
+  income_salaried: string;
+  income_self_emp: string;
+  employment_type: string;
+  joining_fee_text: string;
+  joining_fee_offset: string;
+  annual_fee_text: string;
+  annual_fee_waiver: string;
+  annual_saving: string;
+  reward_conversion_rate: string;
+  redemption_catalogue: string;
+  redemption_options: string;
+  exclusion_earnings: string;
+  exclusion_spends: string;
+  network_url: string;
+  tnc: string;
+  product_usps: Array<{
+    header: string;
+    description: string;
+    priority: number;
+    tag_id: number;
+  }>;
+  tags: Array<{
+    id: number;
+    name: string;
+  }>;
+  product_benefits?: Array<{
+    benefit_type: string;
+    benefit_name?: string;
+    sub_type: string;
+    html_text: string;
+  }>;
+  bank_fee_structure?: {
+    forex_markup: string;
+    forex_markup_comment: string;
+    apr_fees: string;
+    apr_fees_comment: string;
+    atm_withdrawal: string;
+    atm_withdrawal_comment: string;
+    reward_redemption_fees: string;
+    late_payment_annual: string;
+    late_payment_fine: string;
+  };
+  banks: {
+    name: string;
+  };
+  sourceable?: boolean;
+  invite_only?: boolean;
+}
+
+
+export default function CardDetails() {
+  const params = useParams();
+  const alias = params?.alias as string;
+  const router = useRouter();
+  const [card, setCard] = useState<CardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showFixedCTA, setShowFixedCTA] = useState(false);
+  const [selectedBenefitCategory, setSelectedBenefitCategory] = useState<string>('All');
+  const [showEligibilityDialog, setShowEligibilityDialog] = useState(false);
+  const [eligibilitySubmitted, setEligibilitySubmitted] = useState(false);
+  const [isComparePanelOpen, setIsComparePanelOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
+  const { toggleCard, isSelected, startComparisonWith } = useComparison();
+  const heroRef = useRef<HTMLDivElement>(null);
+  const feesRef = useRef<HTMLDivElement>(null);
+  const benefitsRef = useRef<HTMLDivElement>(null);
+  const rewardsRef = useRef<HTMLDivElement>(null);
+  const feeStructureRef = useRef<HTMLDivElement>(null);
+  const allBenefitsRef = useRef<HTMLDivElement>(null);
+  const tncRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    fetchCardDetails();
+  }, [alias]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (heroRef.current) {
+        const heroRect = heroRef.current.getBoundingClientRect();
+        const heroHeight = heroRect.height;
+        const scrolledPastHero = heroRect.top + (heroHeight * 0.8); // Show when 80% of hero is scrolled
+        setShowFixedCTA(scrolledPastHero < 0);
+      }
+
+      // Update active section for navigation
+      const sections = [
+        { ref: feesRef, id: 'fees' },
+        { ref: benefitsRef, id: 'benefits' },
+        { ref: rewardsRef, id: 'rewards' },
+        { ref: feeStructureRef, id: 'fee-structure' },
+        { ref: allBenefitsRef, id: 'all-benefits' },
+        { ref: tncRef, id: 'tnc' }
+      ];
+
+      for (const section of sections) {
+        if (section.ref.current) {
+          const rect = section.ref.current.getBoundingClientRect();
+          if (rect.top <= 200 && rect.bottom >= 200) {
+            setActiveSection(section.id);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Card details page view — fires once the card data is loaded
+  useEffect(() => {
+    if (card) {
+      const ref = typeof document !== 'undefined' ? document.referrer : '';
+      trackCardDetailsPageView(card.seo_card_alias || alias, card.name, card.banks?.name, ref);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card]);
+
+  // Fire benefits_viewed when the Key Benefits section scrolls into view
+  useEffect(() => {
+    if (!card || !benefitsRef.current || typeof IntersectionObserver === 'undefined') return;
+    let fired = false;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !fired) {
+          fired = true;
+          trackCardDetailsBenefitsViewed(card.seo_card_alias || alias);
+          observer.disconnect();
+        }
+      });
+    }, { threshold: 0.3 });
+    observer.observe(benefitsRef.current);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card]);
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement>, sectionId: string) => {
+    setActiveSection(sectionId);
+    if (ref.current) {
+      const navHeight = window.innerWidth < 640 ? 64 : window.innerWidth < 768 ? 72 : 80; // Responsive nav height
+      const quickNavHeight = 60; // Quick navigation height (visible when showFixedCTA is true)
+      const stickyCtaHeight = 70; // Sticky CTA button height
+      const offset = navHeight + quickNavHeight + 20; // Total offset with padding
+      const elementPosition = ref.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const fetchCardDetails = async () => {
+    if (!alias) return;
+
+    try {
+      setLoading(true);
+      const response = await cardService.getCardDetailsByAlias(alias);
+      if (response.status === 'success' && response.data) {
+        const cardData = Array.isArray(response.data) ? response.data[0] : response.data;
+        if (cardData) {
+          setCard(cardData);
+        } else {
+          toast.error('Card not found');
+        }
+      } else {
+        toast.error('Failed to load card details');
+      }
+    } catch (error) {
+      console.error('Error fetching card details:', error);
+      toast.error('Unable to load card. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: `${card?.name} - Credit Card Details`,
+      text: `Check out ${card?.name} - ${card?.card_type} card with great benefits!`,
+      url: url,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        toast.success('Shared successfully!');
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          // Fallback to clipboard
+          navigator.clipboard.writeText(url);
+          toast.success('Link copied to clipboard!');
+        }
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
+    }
+  };
+
+  const handleApply = () => {
+    if (!card) return;
+    analytics.trackCardAction('Apply Now', card.name);
+    trackCardDetailsApplyNowClicked(card.seo_card_alias || alias, card.name);
+    if (eligibilitySubmitted) {
+      redirectToCardApplication(card);
+      return;
+    }
+    setShowEligibilityDialog(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background pt-24 md:pt-28">
+        <Navigation />
+        <div className="container mx-auto px-4 py-20">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!card) {
+    return (
+      <div className="min-h-screen bg-background pt-24 md:pt-28">
+        <Navigation />
+        <div className="container mx-auto px-4 py-20 text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Card not found</h1>
+          <Link to="/cards">
+            <Button>Back to Cards</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const jf = feeCalc(card.joining_fee_text);
+  const af = feeCalc(card.annual_fee_text);
+
+  const sortedUSPs = [...(card.product_usps || [])].sort((a, b) => a.priority - b.priority);
+  const topUSPs = sortedUSPs.slice(0, 4);
+
+  // Group benefits by type for horizontal scroll - exclude "All Benefits" and "all" variations
+  const benefitTypes = card.product_benefits
+    ? Array.from(new Set(card.product_benefits
+      .map(b => b.benefit_type)
+      .filter(type => type && type.toLowerCase() !== 'all' && type.toLowerCase() !== 'all benefits')
+    ))
+    : [];
+
+  const benefitCategories = ['All', ...benefitTypes];
+
+  const filteredBenefits = selectedBenefitCategory === 'All'
+    ? card.product_benefits?.filter(b =>
+      b.benefit_type &&
+      b.benefit_type.toLowerCase() !== 'all' &&
+      b.benefit_type.toLowerCase() !== 'all benefits'
+    )
+    : card.product_benefits?.filter(b => b.benefit_type === selectedBenefitCategory);
+
+  return (
+    <div className="min-h-screen bg-background pt-24 md:pt-28">
+      <Navigation />
+
+      {/* Back Button & Breadcrumb */}
+      <div className="section-shell py-4">
+        <div className="flex items-center gap-4 mb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              trackCardDetailsBackClicked(card.seo_card_alias || alias);
+              router.push('/cards');
+              setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+            }}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Cards
+          </Button>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          <Link to="/" className="hover:text-foreground" onClick={() => trackCardDetailsBreadcrumbClicked('Home', card.seo_card_alias || alias)}>Home</Link>
+          {' / '}
+          <Link to="/cards" className="hover:text-foreground" onClick={() => trackCardDetailsBreadcrumbClicked('Cards', card.seo_card_alias || alias)}>Cards</Link>
+          {' / '}
+          <span className="text-foreground">{card.name}</span>
+        </div>
+      </div>
+
+      {/* Hero Section */}
+      <section
+        ref={heroRef}
+        className="relative overflow-hidden py-12 md:py-20"
+        style={{
+          background: card.card_bg_gradient || 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)'
+        }}
+      >
+        <div className="section-shell">
+          <div className="flex flex-col-reverse lg:grid lg:grid-cols-2 gap-8 items-center">
+            {/* Card Image */}
+            <div className="relative animate-fade-in">
+              <div className="relative w-full max-w-md mx-auto">
+                <img
+                  src={card.image || card.card_bg_image || '/placeholder.svg'}
+                  alt={card.name}
+                  className="w-full h-auto rounded-2xl shadow-2xl"
+                  onError={(e) => {
+                    e.currentTarget.src = '/placeholder.svg';
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Card Info */}
+            <div className="text-white space-y-6 animate-fade-in w-full">
+              <div className="space-y-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-white/70">Card overview</p>
+                <h1 className="text-3xl md:text-4xl font-bold">{card.name}</h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Badge variant="secondary" className="text-sm">
+                    {card.card_type}
+                  </Badge>
+                  {card.banks?.name && <span className="text-sm text-white/80">{card.banks.name}</span>}
+                </div>
+              </div>
+
+              {/* Top USPs */}
+              <div className="space-y-2">
+                {topUSPs.slice(0, 2).map((usp, index) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <span className="text-yellow-400 mt-1">✓</span>
+                    <div>
+                      <p className="font-semibold">{usp.header}</p>
+                      <p className="text-sm text-gray-200">{usp.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Status badge */}
+              {getCardStatus(card) === 'discontinued' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-[#1A3B38] text-[#BDE6E2] border border-[#0B7A8A]/40 shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-[#BDE6E2] inline-block" />
+                  Discontinued
+                </span>
+              )}
+              {getCardStatus(card) === 'invite_only' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold tracking-wide bg-[#0B7A8A] text-white shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-white inline-block" />
+                  Invite Only
+                </span>
+              )}
+
+              {/* CTAs */}
+              <div className="flex gap-3 flex-wrap items-center">
+                {canApply(card) && (
+                  <Button
+                    size="lg"
+                    onClick={handleApply}
+                    className="bg-white text-primary hover:bg-white/90 font-semibold"
+                  >
+                    Apply Now
+                    <ExternalLink className="ml-2 w-4 h-4" />
+                  </Button>
+                )}
+                {canApply(card) && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => {
+                      setShowEligibilityDialog(true);
+                      analytics.trackCardAction('Check Eligibility', card.name);
+                      trackCardDetailsCheckEligibilityClicked(card.seo_card_alias || alias, card.name);
+                      if (typeof window !== 'undefined' && (window as any).gtag) {
+                        (window as any).gtag('event', 'eligibility_modal_open', {
+                          card_alias: alias,
+                          card_name: card.name
+                        });
+                      }
+                    }}
+                    className="border-white text-white hover:bg-white/10"
+                  >
+                    <Shield className="mr-2 w-4 h-4" />
+                    Check Eligibility
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant={isSelected(card.seo_card_alias) ? "secondary" : "ghost"}
+                  onClick={() => {
+                    startComparisonWith(card);
+                    setIsComparePanelOpen(true);
+                    analytics.trackCardAction('Compare', card.name);
+                  }}
+                  className={isSelected(card.seo_card_alias)
+                    ? "border border-white/50 text-white bg-white/20 hover:bg-white/30"
+                    : "border border-white/30 text-white/80 hover:text-white hover:bg-white/10"
+                  }
+                >
+                  {isSelected(card.seo_card_alias) ? (
+                    <>
+                      <Check className="mr-2 w-4 h-4" />
+                      Added
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 w-4 h-4" />
+                      Compare
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Sticky Apply Now Button - Mobile Optimized */}
+      {showFixedCTA && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background/98 backdrop-blur-md border-t-2 border-border/80 p-3 sm:p-4 z-50 shadow-2xl safe-area-inset-bottom">
+          <div className="container mx-auto px-3 sm:px-4 flex gap-2 sm:gap-3">
+            {canApply(card) ? (
+              <Button
+                className="flex-1 touch-target h-12 sm:h-14 font-bold text-sm sm:text-base shadow-lg"
+                size="lg"
+                onClick={handleApply}
+              >
+                <span className="hidden xs:inline">Apply Now - Instant Decision</span>
+                <span className="xs:hidden">Apply Now</span>
+                <ExternalLink className="ml-1.5 sm:ml-2 w-4 h-4" />
+              </Button>
+            ) : (
+              <div className="flex-1 flex items-center justify-center h-12 sm:h-14 rounded-lg bg-muted text-muted-foreground font-semibold text-sm">
+                {getCardStatus(card) === 'discontinued' ? 'Discontinued' : 'Invite Only — Not Available Online'}
+              </div>
+            )}
+            <Button
+              size="lg"
+              variant={isSelected(card.seo_card_alias) ? "default" : "outline"}
+              onClick={() => {
+                startComparisonWith(card);
+                setIsComparePanelOpen(true);
+                analytics.trackCardAction('Compare', card.name);
+                trackCardDetailsCompareClicked(card.seo_card_alias || alias, card.name);
+              }}
+              className={`touch-target h-12 sm:h-14 px-4 sm:px-6 ${isSelected(card.seo_card_alias)
+                ? "border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-lg"
+                : "border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold"
+                }`}
+            >
+              {isSelected(card.seo_card_alias) ? (
+                <>
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
+                  <span className="hidden sm:inline">Added</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5 sm:mr-2" />
+                  <span className="hidden sm:inline">Compare</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Navigation - Visible on all devices when scrolled */}
+      {showFixedCTA && (
+        <div className="fixed top-[64px] sm:top-[72px] md:top-20 left-0 right-0 bg-background/98 backdrop-blur-md border-b border-border/80 z-40 shadow-lg">
+          <div className="container mx-auto px-3 sm:px-4">
+            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto py-2.5 sm:py-3 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+              {[
+                { id: 'fees', label: 'Fees', ref: feesRef },
+                { id: 'benefits', label: 'Benefits', ref: benefitsRef },
+                { id: 'rewards', label: 'Rewards', ref: rewardsRef },
+                ...(card?.bank_fee_structure ? [{ id: 'fee-structure', label: 'Fee Structure', ref: feeStructureRef }] : []),
+                ...(sortedUSPs.length > 2 ? [{ id: 'all-benefits', label: 'All Benefits', ref: allBenefitsRef }] : []),
+                ...(card?.tnc ? [{ id: 'tnc', label: 'T&Cs', ref: tncRef }] : [])
+              ].map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => scrollToSection(section.ref, section.id)}
+                  className={`flex-shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl whitespace-nowrap transition-all duration-200 touch-target ${activeSection === section.id
+                    ? 'bg-primary text-primary-foreground shadow-md scale-105'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted'
+                    }`}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="section-shell py-8 sm:py-10 md:py-12 space-y-8 sm:space-y-10 md:space-y-12 pb-24 sm:pb-28">
+        {/* Fees & Eligibility - Moved to top as users want to see this first */}
+        <div className="grid lg:grid-cols-2 gap-6" ref={feesRef}>
+          {/* Fees */}
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-4">Fees</h2>
+            <section className="bg-card border border-border rounded-xl p-6" id="fees">
+              <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 pb-4 border-b border-border">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Joining Fee</p>
+                    <span className="text-xl font-bold text-foreground">{jf.inline}</span>
+                  </div>
+                  {card.joining_fee_offset && (
+                    <div className="bg-[#E0F7F9] border border-[#0B7A8A]/20 rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
+                      <p className="text-xs font-medium text-primary leading-relaxed">
+                        {card.joining_fee_offset}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Annual Fee</p>
+                    <span className="text-xl font-bold text-foreground">{af.inline}</span>
+                  </div>
+                  {card.annual_fee_waiver && (
+                    <div className="bg-[#E0F7F9] border border-[#0B7A8A]/20 rounded-lg px-4 py-2.5 max-w-full md:max-w-sm">
+                      <p className="text-xs font-semibold text-primary mb-1">Waiver</p>
+                      <p className="text-xs text-primary/90 leading-relaxed">
+                        {card.annual_fee_waiver}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Eligibility */}
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-4">Eligibility</h2>
+            <section className="bg-card border border-border rounded-xl p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Age</p>
+                  <p className="text-lg font-semibold text-foreground">{card.min_age}-{card.max_age} years</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Credit Score</p>
+                  <p className="text-lg font-semibold text-foreground">{card.crif}+</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Min Income</p>
+                  <p className="text-lg font-semibold text-foreground">₹{card.income_salaried} LPA</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Employment</p>
+                  <p className="text-lg font-semibold text-foreground capitalize">{card.employment_type}</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        {/* All Benefits - Improved layout */}
+        {sortedUSPs.length > 2 && (
+          <section className="animate-fade-in" ref={benefitsRef} id="benefits">
+            <h2 className="text-2xl font-bold text-foreground mb-6">Key Benefits</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              {sortedUSPs.slice(2).map((usp, index) => (
+                <div
+                  key={index}
+                  className="bg-card border border-border rounded-lg p-5 hover:border-primary/50 transition-all duration-200"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#E0F7F9] flex items-center justify-center flex-shrink-0 mt-1">
+                      <span className="text-primary text-lg">✓</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground mb-1.5">{usp.header}</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{usp.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Best For */}
+        {card.tags && card.tags.length > 0 && (
+          <section>
+            <h2 className="text-2xl font-bold text-foreground mb-6">Best For</h2>
+            <div className="flex flex-wrap gap-3">
+              {card.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0F7F9] text-primary border border-[#0B7A8A]/20"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Rewards & Redemption - Aligned with Design System */}
+        <section ref={rewardsRef} id="rewards">
+          <h2 className="text-2xl font-bold text-foreground mb-6">Rewards & Redemption</h2>
+          <div className="bg-card border border-border rounded-xl p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-sm">
+                <Gift className="w-7 h-7 text-primary-foreground" />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Reward Conversion Rate */}
+              <div className="bg-background border border-border rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Award className="w-5 h-5 text-primary" />
+                  <p className="text-sm font-medium text-muted-foreground">Reward Conversion Rate</p>
+                </div>
+                <p className="text-3xl font-bold text-primary">
+                  {card.reward_conversion_rate}
+                </p>
+              </div>
+
+              {/* Redemption Options & Catalogue - Single Aligned Section */}
+              <div className="bg-background border border-border rounded-xl p-6 space-y-4">
+                {/* Redemption Options */}
+                {card.redemption_options && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      <h3 className="font-semibold text-foreground">Redemption Options</h3>
+                    </div>
+                    <div
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.redemption_options) }}
+                      className="prose prose-sm max-w-none text-muted-foreground 
+                      [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-2 
+                      [&>li]:text-muted-foreground [&>li]:leading-relaxed
+                      [&>p]:mb-3 [&>p]:leading-relaxed
+                      [&>strong]:text-foreground [&>strong]:font-semibold"
+                    />
+                  </div>
+                )}
+
+                {/* Redemption Catalogue */}
+                {card.redemption_catalogue && card.redemption_catalogue !== 'N/A' && (
+                  <div className={card.redemption_options ? 'pt-4 border-t border-border' : ''}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ExternalLink className="w-5 h-5 text-primary" />
+                      <h3 className="font-semibold text-foreground">Redemption Catalogue</h3>
+                    </div>
+                    <a
+                      href={card.redemption_catalogue}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
+                    >
+                      View Redemption Catalogue
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Fee Structure */}
+        {card.bank_fee_structure && (
+          <section ref={feeStructureRef} id="fee-structure">
+            <h2 className="text-2xl font-bold text-foreground mb-6">Fee Structure</h2>
+            <div className="bg-card border border-border rounded-xl p-8">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="forex">
+                  <AccordionTrigger className="px-6">Foreign Currency Markup</AccordionTrigger>
+                  <AccordionContent className="px-6">
+                    <p className="font-semibold mb-2">{card.bank_fee_structure.forex_markup}</p>
+                    {card.bank_fee_structure.forex_markup_comment && (
+                      <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.bank_fee_structure.forex_markup_comment) }} className="prose prose-sm max-w-none text-muted-foreground" />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+                {card.bank_fee_structure.apr_fees && (
+                  <AccordionItem value="apr">
+                    <AccordionTrigger className="px-6">APR Fees</AccordionTrigger>
+                    <AccordionContent className="px-6">
+                      <p className="font-semibold mb-2">{card.bank_fee_structure.apr_fees}</p>
+                      {card.bank_fee_structure.apr_fees_comment && (
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.bank_fee_structure.apr_fees_comment) }} className="prose prose-sm max-w-none text-muted-foreground" />
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+                <AccordionItem value="late">
+                  <AccordionTrigger className="px-6">Late Payment Charges</AccordionTrigger>
+                  <AccordionContent className="px-6 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-semibold mb-2">Amount Range</p>
+                        {card.bank_fee_structure.late_payment_annual?.split('|').map((range, i) => (
+                          <p key={i} className="text-muted-foreground">{range.trim()}</p>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="font-semibold mb-2">Late Fee</p>
+                        {card.bank_fee_structure.late_payment_fine?.split('|').map((fee, i) => (
+                          <p key={i} className="text-muted-foreground">{fee.trim()}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </section>
+        )}
+
+        {/* Exclusions */}
+        <section>
+          <h2 className="text-2xl font-bold text-foreground mb-6">Exclusions</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Accordion type="single" collapsible className="bg-card border border-border rounded-xl">
+              <AccordionItem value="earnings">
+                <AccordionTrigger className="px-6">Earning Exclusions</AccordionTrigger>
+                <AccordionContent className="px-6">
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {card.exclusion_earnings?.split(',').map((item, i) => (
+                      <li key={i}>{item.trim()}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <Accordion type="single" collapsible className="bg-card border border-border rounded-xl">
+              <AccordionItem value="spends">
+                <AccordionTrigger className="px-6">Spending Exclusions</AccordionTrigger>
+                <AccordionContent className="px-6">
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {card.exclusion_spends?.split(',').map((item, i) => (
+                      <li key={i}>{item.trim()}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </section>
+
+        {/* All Card Benefits - With Horizontal Scroll Categories */}
+        {card.product_benefits && card.product_benefits.length > 0 && (
+          <section className="animate-fade-in" ref={allBenefitsRef} id="all-benefits">
+            <h2 className="text-3xl font-bold text-foreground mb-6">All Card Benefits</h2>
+
+            {/* Horizontal Scrollable Category Pills */}
+            <div className="relative mb-6">
+              <div className="overflow-x-auto pb-3 scrollbar-hide">
+                <div className="flex gap-3 min-w-max">
+                  {benefitCategories.map((category) => {
+                    const isActive = selectedBenefitCategory === category;
+                    const categoryCount = category === 'All'
+                      ? card.product_benefits?.filter(b =>
+                          b.benefit_type &&
+                          b.benefit_type.toLowerCase() !== 'all' &&
+                          b.benefit_type.toLowerCase() !== 'all benefits'
+                        ).length
+                      : card.product_benefits?.filter(b => b.benefit_type === category).length;
+
+                    // Format category name: replace underscores and title case
+                    const formattedCategory = category
+                      .replace(/_/g, ' ')
+                      .split(' ')
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                      .join(' ');
+
+                    return (
+                      <button
+                        key={category}
+                        onClick={() => setSelectedBenefitCategory(category)}
+                        className={`px-6 py-3 rounded-full text-sm font-semibold whitespace-nowrap transition-all shadow-md ${isActive
+                          ? 'bg-primary text-primary-foreground scale-105 shadow-lg'
+                          : 'bg-card text-muted-foreground hover:bg-muted border border-border'
+                          }`}
+                      >
+                        <span>{formattedCategory}</span>
+                        <span className={`ml-2 text-xs ${isActive ? 'opacity-90' : 'opacity-60'}`}>
+                          ({categoryCount})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Benefits List */}
+            <div className="space-y-3">
+              {filteredBenefits && filteredBenefits.length > 0 ? (
+                filteredBenefits.map((benefit, index) => (
+                  <div
+                    key={index}
+                    className="bg-card border-2 border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] flex items-center justify-center flex-shrink-0 shadow-md">
+                          <span className="text-primary-foreground text-sm font-bold">✓</span>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg text-foreground mb-3">{benefit.sub_type}</h3>
+                          <div
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(benefit.html_text) }}
+                            className="prose prose-sm max-w-none text-muted-foreground 
+                              [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:space-y-1 
+                              [&>li]:text-muted-foreground [&>li]:leading-relaxed
+                              [&>p]:mb-2 [&>p]:leading-relaxed
+                              [&>strong]:text-foreground [&>strong]:font-semibold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No benefits found in this category
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* How to Apply - Enhanced */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-[#E0F7F9] via-[#E0F7F9]/10 to-accent/10 border-2 border-[#0B7A8A]/20 rounded-2xl p-6 sm:p-8 lg:p-10 shadow-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#f0f9ff] rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/5 rounded-full blur-3xl -z-10" />
+
+          <div className="text-center mb-6 sm:mb-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary mb-2">Fast Approval</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Ready to Get Started?</h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Apply now and get instant decision in 60 seconds</p>
+          </div>
+
+          <div className="grid gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8 max-w-4xl mx-auto md:grid-cols-3">
+            <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+                1
+              </div>
+              <div className="text-left md:text-center">
+                <p className="font-semibold text-foreground mb-1 text-base sm:text-lg">Click Apply Now</p>
+                <p className="text-sm text-muted-foreground">Start your application</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+                2
+              </div>
+              <div className="text-left md:text-center">
+                <p className="font-semibold text-foreground mb-1 text-base sm:text-lg">Complete KYC Details</p>
+                <p className="text-sm text-muted-foreground">Submit your documents</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 md:flex-col md:text-center md:items-center bg-background/70 border border-border rounded-2xl p-4 sm:p-5 shadow-md">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#0B7A8A] to-[#E0F7F9] text-primary-foreground rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg">
+                3
+              </div>
+              <div className="text-left md:text-center">
+                <p className="font-semibold text-foreground mb-1 text-base sm:text-lg">Get Instant Decision</p>
+                <p className="text-sm text-muted-foreground">Approval in 60 seconds</p>
+              </div>
+            </div>
+          </div>
+          <div className="text-center">
+            <Button size="lg" onClick={handleApply} className="w-full sm:w-auto px-8 shadow-lg hover:shadow-xl transition-all touch-target">
+              Apply Now - Get Instant Decision
+              <ExternalLink className="ml-2 w-5 h-5" />
+            </Button>
+          </div>
+        </section>
+
+        {/* Terms & Conditions - Improved */}
+        <section ref={tncRef} id="tnc">
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <button
+              onClick={(e) => {
+                const content = e.currentTarget.nextElementSibling;
+                if (content) {
+                  content.classList.toggle('hidden');
+                  const icon = e.currentTarget.querySelector('svg');
+                  if (icon) {
+                    icon.classList.toggle('rotate-180');
+                  }
+                }
+              }}
+              className="w-full px-6 py-5 flex items-center justify-between hover:bg-muted/50 transition-colors group"
+            >
+              <h2 className="text-xl font-bold text-foreground">Terms & Conditions</h2>
+              <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform rotate-180 group-hover:text-foreground" />
+            </button>
+            <div className="px-6 pb-6">
+              <div className="pt-4 border-t border-border">
+                <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{card.tnc}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* Eligibility Dialog */}
+      <EligibilityDialog
+        open={showEligibilityDialog}
+        onOpenChange={(open) => {
+          setShowEligibilityDialog(open);
+          if (!open && !eligibilitySubmitted) {
+            toast.error('Please complete eligibility check to apply for a card.');
+          }
+        }}
+        onEligibilityComplete={() => setEligibilitySubmitted(true)}
+        onEligibilityReset={() => setEligibilitySubmitted(false)}
+        cardAlias={alias || ''}
+        cardName={card.name}
+        networkUrl={card.network_url || card.card_apply_link || ''}
+      />
+
+      {/* Comparison Panel */}
+      <ComparePanel
+        open={isComparePanelOpen}
+        onOpenChange={setIsComparePanelOpen}
+        preSelectedCard={card}
+      />
+
+      <Footer />
+    </div>
+  );
+}

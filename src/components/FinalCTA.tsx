@@ -1,0 +1,88 @@
+﻿"use client";
+
+import { Button } from "./ui/button";
+import { ArrowRight, Sparkles, TrendingUp } from "lucide-react";
+import { Link } from "@/components/Link";
+import { useRouter } from "next/navigation";
+
+const FinalCTA = () => {
+  const router = useRouter();
+
+  return (
+    <section className="py-24 bg-gradient-to-br from-[#f0f9ff] via-background to-[#f0f9ff]">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Icon */}
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#E0F7F9] mb-8">
+            <TrendingUp className="w-10 h-10 text-primary" />
+          </div>
+
+          {/* Heading */}
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            Your Money Deserves to Work Harder
+          </h2>
+
+          {/* Subheading */}
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Stop leaving thousands on the table. Find cards that actually match how you spend.
+            Compare, choose, and start saving—all in minutes, not hours.
+          </p>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-8 max-w-3xl mx-auto mb-12">
+            <div className="p-6 rounded-xl bg-card shadow-md">
+              <div className="text-3xl font-bold text-primary mb-2">100+</div>
+              <div className="text-sm text-muted-foreground">Credit Cards</div>
+            </div>
+            <div className="p-6 rounded-xl bg-card shadow-md">
+              <div className="text-3xl font-bold text-primary mb-2">₹5K</div>
+              <div className="text-sm text-muted-foreground">Avg. Monthly Savings</div>
+            </div>
+            <div className="p-6 rounded-xl bg-card shadow-md">
+              <div className="text-3xl font-bold text-primary mb-2">100K+</div>
+              <div className="text-sm text-muted-foreground">Cards Compared</div>
+            </div>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button
+              size="lg"
+              className="group shadow-xl min-w-[250px]"
+              onClick={() => {
+                router.push("/cards");
+                setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+              }}
+            >
+              <Sparkles className="mr-2 group-hover:rotate-12 transition-transform" />
+              Explore All Cards
+              <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+            </Button>
+
+            <Button
+              size="lg"
+              variant="outline"
+              className="shadow-lg min-w-[250px]"
+              onClick={() => {
+                router.push("/card-genius");
+                setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+              }}
+            >
+              Try AI Card Genius
+            </Button>
+          </div>
+
+          {/* Trust Badge */}
+          <div className="mt-12 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <svg className="w-5 h-5 text-[#0B7A8A]" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>100% Safe & Secure | No Hidden Charges | Instant Eligibility Check</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default FinalCTA;

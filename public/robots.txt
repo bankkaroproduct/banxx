@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /$
+Disallow: /cards/
+Disallow: /card-genius/
+Disallow: /card-genius-category/
+Disallow: /beat-my-card/
+Disallow: /compare/
+Disallow: /api/
+Disallow: /redirect/
+Disallow: /blogs/
+
+# Canonical source: https://great.cards/sitemap.xml
