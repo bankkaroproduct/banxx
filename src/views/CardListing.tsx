@@ -430,6 +430,17 @@ const CardListing = () => {
     return (a.name || '').localeCompare(b.name || '');
   };
 
+  /**
+   * A fully-resolved partner arrival is an eligibility-gated flow: the user came
+   * from a partner link (or the entry form) that already carries sal/pin/st, and
+   * must only ever see the cards they qualify for. Eligibility is therefore
+   * locked — it cannot be cleared to reveal the full catalogue. The chip row
+   * stays editable (a different salary re-runs eligibility), but there is no
+   * "show all cards" escape in this flow. Defined here (ahead of filteredCards)
+   * because that memo reads it.
+   */
+  const eligibilityLocked = Boolean(hydration?.resolved);
+
   const sortedCards = useMemo(() => {
     if (!Array.isArray(cards)) return [];
     return [...cards].sort(compareCardsByPriority);
@@ -481,8 +492,11 @@ const CardListing = () => {
       }
     }
 
-    // 3) Apply eligibility filter purely on frontend (seo_card_alias mapping)
-    if (eligibilitySubmitted && eligibleCardAliases.length > 0) {
+    // 3) Apply eligibility filter purely on frontend (seo_card_alias mapping).
+    // In the locked partner flow the filter applies even when the eligible set
+    // is empty, so zero eligible cards shows an empty state — never the full
+    // catalogue. Outside that flow, an empty set falls back to showing all.
+    if (eligibilitySubmitted && (eligibleCardAliases.length > 0 || eligibilityLocked)) {
       const eligibleSet = new Set(eligibleCardAliases.map(String));
       base = base.filter(card => {
         const alias = getCardAlias(card) || card.seo_card_alias || card.card_alias;
@@ -491,7 +505,7 @@ const CardListing = () => {
     }
 
     return base;
-  }, [sortedCards, searchQuery, eligibilitySubmitted, eligibleCardAliases, filters.category, filters.bank_names, bankIdToName, cardSavings]);
+  }, [sortedCards, searchQuery, eligibilitySubmitted, eligibleCardAliases, eligibilityLocked, filters.category, filters.bank_names, bankIdToName, cardSavings]);
   const loadMore = () => {
     trackListingLoadMoreClicked();
     setIsLoadingMore(true);
@@ -566,16 +580,20 @@ const CardListing = () => {
     setSearchQuery("");
     setDisplayCount(12);
 
-    // Reset eligibility data
-    setEligibilitySubmitted(false);
-    setEligibleCardAliases([]);
-    setEligibility({
-      pincode: "",
-      inhandIncome: "",
-      empStatus: "salaried"
-    });
+    // In the eligibility-gated partner flow, "Clear all" clears the other
+    // filters but must NOT drop eligibility: the user may never see the full
+    // catalogue here. Outside that flow it resets eligibility as before.
+    if (!eligibilityLocked) {
+      setEligibilitySubmitted(false);
+      setEligibleCardAliases([]);
+      setEligibility({
+        pincode: "",
+        inhandIncome: "",
+        empStatus: "salaried"
+      });
+    }
 
-    // Trigger API call without eligibility
+    // Trigger API call (eligibility, if locked, is re-applied client-side).
     fetchCards();
   };
   /**
@@ -774,7 +792,7 @@ const CardListing = () => {
   }, [eligibility]);
 
   /** True when the user arrived with a complete, valid eligibility basis. */
-  const skipForm = Boolean(hydration?.resolved);
+  const skipForm = eligibilityLocked;
 
   const handleGeniusSubmit = async (spendingData: SpendingData) => {
     analytics.trackGeniusStart('Listing Genius - ' + filters.category);
@@ -1187,7 +1205,7 @@ const CardListing = () => {
 
               {/* Desktop: Always Visible */}
               <div className="hidden lg:block bg-card rounded-2xl shadow-lg border border-border/50 p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 items-end">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Pincode</label>
                     <Input
@@ -1410,7 +1428,8 @@ const CardListing = () => {
               {eligibilitySubmitted && <Badge variant="secondary" className="gap-2 bg-surface-elevated text-accent-text border-border">
                 <CheckCircle2 className="w-3 h-3" />
                 Eligibility Applied
-                <X className="w-3 h-3 cursor-pointer" onClick={async () => {
+                {/* Locked in the partner flow: no removing eligibility to reveal all cards. */}
+                {!eligibilityLocked && <X className="w-3 h-3 cursor-pointer" onClick={async () => {
                   setEligibilitySubmitted(false);
                   setEligibility({
                     pincode: "",
@@ -1419,7 +1438,7 @@ const CardListing = () => {
                   });
                   await fetchCards();
                   toast.success("Eligibility filter removed");
-                }} />
+                }} />}
               </Badge>}
               {geniusSpendingData && <Badge variant="secondary" className="gap-2 bg-surface-elevated text-accent-text border-border">
                 <Sparkles className="w-3 h-3" />
@@ -1443,9 +1462,9 @@ const CardListing = () => {
                   Clear All Filters
                 </Button>
               </div> : <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 pb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 md:gap-6 pb-6">
                   {filteredCards.slice(0, displayCount).map((card, index) => <div key={card.id || index} onClick={() => trackCardClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, card.name, card.banks?.name, index)} className="card-item bg-card rounded-xl sm:rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-[1.02] lg:hover:-translate-y-2 flex flex-col h-full active:scale-[0.98]">
-                    <div className="card-image-container relative h-40 sm:h-44 md:h-48 bg-gradient-to-br from-surface-elevated to-surface-elevated flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="card-image-container relative aspect-[5/4] w-full bg-gradient-to-br from-surface-elevated to-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {/* Compare Toggle Icon - Top Right */}
                       <div className="absolute top-3 right-3 z-20">
                         <CompareToggleIcon card={card} />
@@ -1516,7 +1535,7 @@ const CardListing = () => {
                         return null;
                       })()}
 
-                      <img src={card.card_bg_image || card.image || '/placeholder.svg'} alt={card.name} className="w-full h-full object-cover" onError={e => {
+                      <img src={card.card_bg_image || card.image || '/placeholder.svg'} alt={card.name} loading="lazy" className="w-full h-full object-contain" onError={e => {
                         e.currentTarget.src = '/placeholder.svg';
                       }} />
                     </div>

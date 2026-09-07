@@ -528,11 +528,6 @@ All colors MUST be HSL.
       margin: 0 auto !important;
     }
     
-    .card-image-container {
-      height: 175px !important;
-      aspect-ratio: 16/10;
-    }
-    
     .fee-grid {
       display: flex !important;
       border: 1px solid hsl(var(--border));

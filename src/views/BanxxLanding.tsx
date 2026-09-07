@@ -1,20 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search, FileX2, ListChecks, Landmark, IndianRupee } from "lucide-react";
+import { useEffect } from "react";
+import { FileX2, ListChecks, Landmark, IndianRupee } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import BanxxToolsGrid from "@/components/BanxxToolsGrid";
-import PopularCreditCards from "@/components/PopularCreditCards";
-import { Link } from "@/components/Link";
+import PartnerEntryForm from "@/components/PartnerEntryForm";
 import { brandConfig } from "@/config/brand.config";
-import {
-    trackHomePageView,
-    trackHeroSearchBarFocused,
-    trackSearchQueryTyped,
-    trackSearchSubmitted,
-    trackHeroExploreAllCardsClicked,
-} from "@/services/journeyTrack";
+import { trackHomePageView } from "@/services/journeyTrack";
 
 /**
  * Value propositions, deliberately non-numeric.
@@ -34,24 +26,17 @@ const VALUE_PROPS = [
 ];
 
 export default function BanxxLanding() {
-    const [query, setQuery] = useState("");
-    const router = useRouter();
-
     useEffect(() => {
         trackHomePageView();
     }, []);
-
-    const handleSearch = () => {
-        trackSearchSubmitted(query.trim());
-        router.push(query.trim() ? `/cards?q=${encodeURIComponent(query.trim())}` : "/cards");
-    };
 
     return (
         <div className="flex min-h-screen flex-col">
             <Navigation />
 
             <main className="flex-1">
-                {/* Hero */}
+                {/* Hero: eligibility form first. The user provides their basis here,
+                    then lands on the listing showing only the cards they qualify for. */}
                 <section className="relative overflow-hidden bg-gradient-hero pb-16 pt-28 md:pb-20 md:pt-36">
                     <div className="container relative z-10 mx-auto flex max-w-2xl flex-col items-center px-4 text-center">
                         <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-accent-text">
@@ -67,47 +52,7 @@ export default function BanxxLanding() {
                             worth on your spending. No documents, no calls.
                         </p>
 
-                        <div className="w-full max-w-lg">
-                            <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card shadow-md">
-                                <div className="relative flex-1">
-                                    <Search
-                                        className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                    <label htmlFor="hero-search" className="sr-only">
-                                        Search by card name or bank
-                                    </label>
-                                    <input
-                                        id="hero-search"
-                                        value={query}
-                                        onChange={(e) => {
-                                            setQuery(e.target.value);
-                                            trackSearchQueryTyped(e.target.value);
-                                        }}
-                                        onFocus={() => trackHeroSearchBarFocused()}
-                                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                                        placeholder="Search by card name or bank"
-                                        className="h-12 w-full bg-transparent pl-11 pr-4 text-sm text-card-foreground outline-none placeholder:text-muted-foreground"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleSearch}
-                                    className="h-12 flex-shrink-0 bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-                                >
-                                    Search
-                                </button>
-                            </div>
-
-                            <div className="mt-3 flex justify-center">
-                                <Link
-                                    to="/cards"
-                                    onClick={() => trackHeroExploreAllCardsClicked("hero")}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary px-6 py-2.5 text-sm font-medium text-accent-text transition-colors hover:bg-accent"
-                                >
-                                    Check my eligibility
-                                </Link>
-                            </div>
-                        </div>
+                        <PartnerEntryForm />
                     </div>
                 </section>
 
@@ -130,7 +75,6 @@ export default function BanxxLanding() {
                     </div>
                 </section>
 
-                <PopularCreditCards />
                 <BanxxToolsGrid />
             </main>
 
