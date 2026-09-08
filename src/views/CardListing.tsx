@@ -125,6 +125,34 @@ const normalizeCategory = (value: string | null) => {
   return VALID_CATEGORIES.includes(value) ? value : 'all';
 };
 
+/**
+ * UI category -> the tag alias the catalogue labels cards with.
+ *
+ * This doubles as the `slug` sent to /cardgenius/cards, but that parameter is
+ * not honoured: the endpoint returns the identical 158-card list for every
+ * slug value (verified against the partner API — same cards, same order). The
+ * category therefore has to be applied client-side, and every card carries the
+ * matching value in `tags[].seo_alias`.
+ *
+ * Module scope so the filter memo below can depend on a stable reference.
+ */
+const categoryToSlug: Record<string, string> = {
+  'all': '',
+  'fuel': 'best-fuel-credit-card',
+  'shopping': 'best-shopping-credit-card',
+  'online-food': 'online-food-ordering',
+  'dining': 'best-dining-credit-card',
+  'grocery': 'best-cards-grocery-shopping',
+  'travel': 'best-travel-credit-card',
+  'utility': 'best-utility-credit-card'
+};
+
+/** Tag aliases a card is labelled with, from the catalogue payload. */
+const getCardTagAliases = (card: any): string[] =>
+  Array.isArray(card?.tags)
+    ? card.tags.map((t: any) => String(t?.seo_alias ?? '')).filter(Boolean)
+    : [];
+
 const CardListing = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -167,18 +195,6 @@ const CardListing = () => {
     free_cards: false,
     category: initialCategory // all, fuel, shopping, online-food, dining, grocery, travel, utility
   });
-
-  // Category to slug mapping — values must match what the backend /cardgenius/cards API expects
-  const categoryToSlug: Record<string, string> = {
-    'all': '',
-    'fuel': 'best-fuel-credit-card',
-    'shopping': 'best-shopping-credit-card',
-    'online-food': 'online-food-ordering',
-    'dining': 'best-dining-credit-card',
-    'grocery': 'best-cards-grocery-shopping',
-    'travel': 'best-travel-credit-card',
-    'utility': 'best-utility-credit-card'
-  };
 
   /**
    * Eligibility form state.
@@ -477,7 +493,22 @@ const CardListing = () => {
       base = base.filter(card => wanted.has(getCardBankName(card).toLowerCase()));
     }
 
-    // 2) Filter out cards with zero savings when a category is active and savings data is loaded
+    // 1c) Apply the category itself, by tag.
+    //
+    // This used to be left entirely to the API's `slug` parameter plus the
+    // savings filter below, which meant selecting a category did nothing at
+    // all: the endpoint ignores `slug` and returns the whole catalogue, and the
+    // savings filter only engages once the Category Genius dialog has been
+    // submitted. Picking "Fuel" showed all 158 cards unchanged.
+    if (filters.category !== 'all') {
+      const wantedTag = categoryToSlug[filters.category];
+      if (wantedTag) {
+        base = base.filter(card => getCardTagAliases(card).includes(wantedTag));
+      }
+    }
+
+    // 2) Narrow further to cards that actually save money in this category,
+    // but only once Category Genius has produced savings for it.
     if (filters.category !== 'all') {
       const categorySavings = cardSavings[filters.category];
       if (categorySavings && Object.keys(categorySavings).length > 0) {
