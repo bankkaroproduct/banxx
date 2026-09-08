@@ -17,9 +17,8 @@ export interface BrandConfig {
   /**
    * Wordmark asset path, the single swap point for the logo.
    *
-   * Empty string means "no asset yet": BrandWordmark falls back to a text
-   * wordmark. Set this (or NEXT_PUBLIC_BRAND_LOGO) once the Credit Links design
-   * team supplies the clean SVG and nothing else needs to change.
+   * Empty string falls back to a text wordmark. Set this (or
+   * NEXT_PUBLIC_BRAND_LOGO) and nothing else needs to change.
    */
   logo: string;
   /** Dark-mode wordmark. Falls back to the text wordmark when empty. */
@@ -32,9 +31,15 @@ export interface BrandConfig {
 export const brandConfig: BrandConfig = {
   name: process.env.NEXT_PUBLIC_BRAND_NAME || 'Banxx',
   tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE || 'Find the credit card you actually qualify for',
-  logo: process.env.NEXT_PUBLIC_BRAND_LOGO || '',
-  logoDark: process.env.NEXT_PUBLIC_BRAND_LOGO_DARK || '',
-  favicon: process.env.NEXT_PUBLIC_BRAND_FAVICON || '/favicon.svg',
+  // Derived from the brand asset in the Banxx brand pack: the wordmark trimmed
+  // to its glyphs, plus a dark-mode variant with the lettering in white and the
+  // orange/blue X marks untouched. See public/banxx-wordmark.png.
+  logo: process.env.NEXT_PUBLIC_BRAND_LOGO || '/banxx-wordmark.png',
+  logoDark: process.env.NEXT_PUBLIC_BRAND_LOGO_DARK || '/banxx-wordmark-dark.png',
+  // Was /favicon.svg, which is byte-identical to placeholder.svg — a grey
+  // placeholder graphic. The only real favicon in the repo was Tide's logo,
+  // inherited from the template this shell was forked from.
+  favicon: process.env.NEXT_PUBLIC_BRAND_FAVICON || '/banxx-favicon.png',
   email: process.env.NEXT_PUBLIC_BRAND_EMAIL || 'support@banxx.com',
   analyticsId: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '',
 };
