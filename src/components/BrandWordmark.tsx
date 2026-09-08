@@ -15,10 +15,10 @@ import {
  * points at the real wordmark, trimmed from the brand pack PNG, in light and
  * dark variants.
  *
- * The source is raster, not vector: the supplied artwork is a 166x58 PNG whose
- * glyphs occupy 146x33. It renders correctly at the brand book's 124px minimum
- * and a little above, but it cannot scale far past its native size — a vector
- * from the design team is still the right long-term asset.
+ * The source is raster, not vector: 349x79, keyed out of the brand book. That
+ * is a 2.8x downscale at the brand book's 124px minimum, so it stays crisp at
+ * 2x device pixel ratio. A vector is still the better long-term asset for
+ * anything substantially larger than the header.
  *
  * Brand book: minimum 124px reproduction width, 50px clear space all sides. The
  * clear space is applied as a scaled margin so it holds at smaller renderings

@@ -31,9 +31,10 @@ export interface BrandConfig {
 export const brandConfig: BrandConfig = {
   name: process.env.NEXT_PUBLIC_BRAND_NAME || 'Banxx',
   tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE || 'Find the credit card you actually qualify for',
-  // Derived from the brand asset in the Banxx brand pack: the wordmark trimmed
-  // to its glyphs, plus a dark-mode variant with the lettering in white and the
-  // orange/blue X marks untouched. See public/banxx-wordmark.png.
+  // Keyed out of banxx_brand_book.pdf, the only source carrying the complete
+  // wordmark: the loose PNG exports are either cropped through the B or a
+  // low-resolution remove.bg preview. Light variant has the lettering recoloured
+  // to #2B303A with the X marks untouched. See public/banxx-wordmark.png.
   logo: process.env.NEXT_PUBLIC_BRAND_LOGO || '/banxx-wordmark.png',
   logoDark: process.env.NEXT_PUBLIC_BRAND_LOGO_DARK || '/banxx-wordmark-dark.png',
   // Was /favicon.svg, which is byte-identical to placeholder.svg — a grey
