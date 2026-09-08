@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SpendingInput } from "@/components/ui/spending-input";
 import { ArrowLeft, ArrowRight, Sparkles, ChevronDown, Info, Check, X, TrendingUp, CheckCircle2 } from "lucide-react";
 import { cardService, extractEligibleAliases } from "@/services/cardService";
+import { useEligibleAliases, filterToEligible } from "@/hooks/useEligibleAliases";
 import {
   EMP_STATUS_OPTIONS,
   isValidPincode,
@@ -261,6 +262,8 @@ const CardGenius = () => {
     empStatus: ""
   });
   const [eligibilityApplied, setEligibilityApplied] = useState(false);
+  /** Eligible set resolved at the entry form, used when this view has none. */
+  const storedEligible = useEligibleAliases();
   const [eligibleCardAliases, setEligibleCardAliases] = useState<string[]>([]);
 
   // Scroll states
@@ -536,10 +539,13 @@ const CardGenius = () => {
         inhandIncome: toBreIncome(monthly.value),
         empStatus: eligibilityData.empStatus as EmpStatus,
       });
+      const resolved = data.status && data.data ? extractEligibleAliases(data) : undefined;
+      // Cache the resolved set with the basis so the other flows filter on it.
       saveEligibility({
         pincode: eligibilityData.pincode,
         inhandIncome: monthly.value,
         empStatus: eligibilityData.empStatus as EmpStatus,
+        eligibleAliases: resolved,
       });
       if (data.status && data.data) {
         const aliases = extractEligibleAliases(data);
@@ -826,8 +832,13 @@ const CardGenius = () => {
     if (showLifetimeFreeOnly) {
       filteredResults = filteredResults.filter(card => card.joining_fees === 0 && card.annual_fees === 0);
     }
-    if (eligibilityApplied && eligibleCardAliases.length > 0) {
+    // Eligibility resolved in this view wins; otherwise fall back to the set
+    // resolved at the entry form, so arriving here already filtered on the
+    // listing cannot surface a card the user does not qualify for.
+    if (eligibilityApplied) {
       filteredResults = filteredResults.filter(card => eligibleCardAliases.includes(card.seo_card_alias));
+    } else {
+      filteredResults = filterToEligible(filteredResults, storedEligible);
     }
 
     const sortedResults = [...filteredResults].sort((a, b) =>

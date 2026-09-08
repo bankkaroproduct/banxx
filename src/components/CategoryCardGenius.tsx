@@ -17,6 +17,8 @@ import { Card } from "./ui/card";
 import { SpendingInput } from "./ui/spending-input";
 import { useRouter } from "next/navigation";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
+import { filterToEligible } from "@/hooks/useEligibleAliases";
+import { loadEligibleAliases } from "@/lib/eligibilityStore";
 import { toast } from "sonner";
 import { enrichCardGeniusResults, CardGeniusResult } from "@/lib/cardGenius";
 import { feeCalc } from "@/lib/feeUtils";
@@ -404,7 +406,10 @@ useEffect(() => {
         fetchDetails: true
       });
 
-      const topCards = enriched.slice(0, 3);
+      // Restrict to the eligible set before taking the top 3, so the picks are
+      // the best cards the user actually qualifies for rather than the best
+      // three overall trimmed afterwards.
+      const topCards = filterToEligible(enriched, loadEligibleAliases()).slice(0, 3);
 
       setResults(topCards);
       analytics.trackGeniusComplete(selectedCategory || 'unknown', topCards.length);

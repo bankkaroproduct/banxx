@@ -18,6 +18,17 @@ export interface StoredEligibility {
   /** Monthly rupees. */
   inhandIncome?: number;
   empStatus?: EmpStatus;
+  /**
+   * Card aliases the stored basis qualifies for, cached from the one
+   * checkEligibility call that resolved them.
+   *
+   * The basis alone is not enough for the other flows: Card Genius, Category
+   * Genius and Beat My Card each need the eligible set to filter their results,
+   * and re-deriving it per view would mean an extra multi-second call to the
+   * eligibility API on every screen. Resolved once at the entry point, read
+   * everywhere after.
+   */
+  eligibleAliases?: string[];
 }
 
 export const perCardKey = (cardAlias: string) => `eligibility_${cardAlias}`;
@@ -39,4 +50,18 @@ export const saveEligibility = (value: StoredEligibility): void => {
   } catch {
     /* private mode / quota — prefill degrades, never throws */
   }
+};
+
+/**
+ * The eligible set for the current session, or null when eligibility has not
+ * been resolved yet.
+ *
+ * null and [] mean different things and must not be collapsed: null is "no
+ * basis given, do not filter", while [] is "checked, qualifies for nothing" and
+ * must filter everything out. Callers that treat a falsy value as "show all"
+ * would silently show ineligible cards to a user who qualifies for none.
+ */
+export const loadEligibleAliases = (): string[] | null => {
+  const { eligibleAliases } = loadEligibility();
+  return Array.isArray(eligibleAliases) ? eligibleAliases : null;
 };

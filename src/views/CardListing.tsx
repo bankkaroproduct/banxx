@@ -622,10 +622,13 @@ const CardListing = () => {
       setEligibleCardAliases(aliases);
       setEligibilitySubmitted(true);
       setEligibilityOpen(false);
+      // Cache the resolved set alongside the basis: the genius and beat-my-card
+      // flows filter on it and must not re-run this call per view.
       saveEligibility({
         pincode: basis.pincode,
         inhandIncome: basis.inhandIncome,
         empStatus: basis.empStatus,
+        eligibleAliases: aliases,
       });
 
       trackEligibilityChecked(

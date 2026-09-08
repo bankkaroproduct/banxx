@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { CardSearchDropdown } from "@/components/CardSearchDropdown";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
+import { filterToEligible } from "@/hooks/useEligibleAliases";
+import { loadEligibleAliases } from "@/lib/eligibilityStore";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -335,9 +337,13 @@ const BeatMyCard = () => {
           toast.error("No savings data returned. Please adjust your spending inputs and try again.");
           return;
         }
-        const topCard = sortedCards[0];
+        // Recommend only cards the user qualifies for. Their own card is looked
+        // up from the unfiltered savingsArray below: they already hold it, so
+        // eligibility is irrelevant to showing it as the comparison baseline.
+        const eligibleSorted = filterToEligible(sortedCards, loadEligibleAliases());
+        const topCard = eligibleSorted[0];
         if (!topCard) {
-          toast.error("We couldn't find a better card match. Please try again.");
+          toast.error("We couldn't find a better card you're eligible for. Try adjusting your spends.");
           return;
         }
 

@@ -233,6 +233,9 @@ describe('CardListing URL hydration', () => {
         pincode: '560001',
         inhandIncome: 50000,
         empStatus: 'self_employed',
+        // Cached so the genius and beat-my-card flows can filter on the same
+        // set without re-running the eligibility call per view.
+        eligibleAliases: ['card-one'],
       })
     );
   });
