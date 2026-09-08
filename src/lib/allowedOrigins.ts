@@ -47,6 +47,11 @@ export const ALLOWED_ORIGINS: string[] = [
   process.env.NEXT_PUBLIC_APP_URL,
   ...vercelOrigins,
   'https://banxx.bankkaro.com',
+  // The Vercel production alias, listed explicitly rather than left to the
+  // VERCEL_* vars above: those are only present when the project has
+  // "Automatically expose System Environment Variables" enabled, and when it is
+  // not, this domain 403s with nothing in the config to explain why.
+  'https://banxx.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:3002',
