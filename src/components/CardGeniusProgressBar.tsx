@@ -91,7 +91,7 @@ export const CardGeniusProgressBar = ({
               : 'text-sm md:text-base font-semibold'
             }`}>
             <span className="hidden sm:inline text-muted-foreground">Question </span>
-            <span className="text-primary">{activeQuestion + 1}</span>
+            <span className="text-accent-text">{activeQuestion + 1}</span>
             <span className="text-muted-foreground"> of {totalSteps}</span>
           </div>
 

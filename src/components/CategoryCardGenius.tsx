@@ -17,7 +17,6 @@ import { Card } from "./ui/card";
 import { SpendingInput } from "./ui/spending-input";
 import { useRouter } from "next/navigation";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
-import EligibilityDialog from "@/components/EligibilityDialog";
 import { toast } from "sonner";
 import { enrichCardGeniusResults, CardGeniusResult } from "@/lib/cardGenius";
 import { feeCalc } from "@/lib/feeUtils";
@@ -243,8 +242,6 @@ const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 const [responses, setResponses] = useState<Record<string, number>>({});
 const [loading, setLoading] = useState(false);
 const [results, setResults] = useState<CardGeniusResult[]>([]);
-const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
 
 useEffect(() => {
   setSelectedCategory(cgcatSsGet(CGCAT_KEYS.selectedCategory, null));
@@ -485,11 +482,8 @@ useEffect(() => {
         selectedCategory || undefined
       );
 
-      if (applyEligibilityDone) {
-        redirectToCardApplication(matchingCard);
-        return;
-      }
-      setPendingApplyCard(matchingCard);
+      // Apply is not gated on an eligibility check.
+      redirectToCardApplication(matchingCard);
     } catch (error) {
       console.error('Error applying for card:', error);
       handleViewDetails(card);
@@ -831,22 +825,6 @@ useEffect(() => {
         </div>)}
     </div>
   </section>
-  <EligibilityDialog
-    open={!!pendingApplyCard}
-    onOpenChange={(open) => {
-      if (!open) {
-        if (!applyEligibilityDone) {
-          toast.error('Please complete eligibility check to apply for a card.');
-        }
-        setPendingApplyCard(null);
-      }
-    }}
-    onEligibilityComplete={() => setApplyEligibilityDone(true)}
-    onEligibilityReset={() => setApplyEligibilityDone(false)}
-    cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || ''}
-    cardName={pendingApplyCard?.card_name || pendingApplyCard?.name || ''}
-    networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-  />
   </>;
 };
 export default CategoryCardGenius;

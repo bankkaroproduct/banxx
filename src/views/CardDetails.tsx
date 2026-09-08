@@ -254,11 +254,9 @@ export default function CardDetails() {
     if (!card) return;
     analytics.trackCardAction('Apply Now', card.name);
     trackCardDetailsApplyNowClicked(card.seo_card_alias || alias, card.name);
-    if (eligibilitySubmitted) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setShowEligibilityDialog(true);
+    // Apply goes straight to the bank's application. The eligibility check is
+    // still offered by its own button below, but it does not gate applying.
+    redirectToCardApplication(card);
   };
 
   if (loading) {
@@ -424,7 +422,7 @@ export default function CardDetails() {
                   <Button
                     size="lg"
                     onClick={handleApply}
-                    className="bg-card text-primary hover:bg-card/90 font-semibold"
+                    className="bg-card text-accent-text hover:bg-card/90 font-semibold"
                   >
                     Apply Now
                     <ExternalLink className="ml-2 w-4 h-4" />
@@ -975,12 +973,9 @@ export default function CardDetails() {
       {/* Eligibility Dialog */}
       <EligibilityDialog
         open={showEligibilityDialog}
-        onOpenChange={(open) => {
-          setShowEligibilityDialog(open);
-          if (!open && !eligibilitySubmitted) {
-            toast.error('Please complete eligibility check to apply for a card.');
-          }
-        }}
+        // Dismissing is not a failure: the check is optional, so closing it
+        // no longer scolds the user about completing it in order to apply.
+        onOpenChange={setShowEligibilityDialog}
         onEligibilityComplete={() => setEligibilitySubmitted(true)}
         onEligibilityReset={() => setEligibilitySubmitted(false)}
         cardAlias={alias || ''}

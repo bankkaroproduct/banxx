@@ -148,7 +148,7 @@ export default function EligibilityResultDialog({
     }
 
     // Call onRecheck directly — do NOT call onOpenChange(false) which would
-    // propagate to parent and clear pendingApplyCard
+    // propagate the close up to the parent
     onRecheck();
   };
 

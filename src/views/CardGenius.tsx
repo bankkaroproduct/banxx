@@ -17,7 +17,6 @@ import type { SpendingData } from "@/services/cardService";
 import { useToast } from "@/hooks/use-toast";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
-import EligibilityDialog from "@/components/EligibilityDialog";
 import { enrichCardGeniusResults, CardGeniusResult } from "@/lib/cardGenius";
 import { feeCalc } from "@/lib/feeUtils";
 import Navigation from "@/components/Navigation";
@@ -253,8 +252,6 @@ const CardGenius = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   // Apply Now eligibility gate
-  const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-  const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
 
   // Eligibility states
   const [eligibilityOpen, setEligibilityOpen] = useState(false);
@@ -476,11 +473,8 @@ const CardGenius = () => {
   const handleApplyFromDetail = () => {
     if (!selectedCard) return;
     trackScgApplyNowClicked(selectedCard.card_name, selectedCard.seo_card_alias);
-    if (applyEligibilityDone) {
-      redirectToCardApplication(selectedCard);
-      return;
-    }
-    setPendingApplyCard(selectedCard);
+    // Apply is not gated on an eligibility check.
+    redirectToCardApplication(selectedCard);
   };
   const handleCardSelect = (card: CardGeniusResult) => {
     trackScgResultCardClicked(card.seo_card_alias, card.card_name);
@@ -497,11 +491,8 @@ const CardGenius = () => {
       event.preventDefault();
     }
     trackScgApplyNowClicked(card.card_name, card.seo_card_alias);
-    if (applyEligibilityDone) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setPendingApplyCard(card);
+    // Apply is not gated on an eligibility check.
+    redirectToCardApplication(card);
   };
   const handlePrev = () => {
     if (currentStep > 0) {
@@ -793,22 +784,6 @@ const CardGenius = () => {
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </main>
-        <EligibilityDialog
-          open={!!pendingApplyCard}
-          onOpenChange={(open) => {
-            if (!open) {
-              if (!applyEligibilityDone) {
-                toast({ title: "Eligibility Required", description: "Please complete eligibility check to apply for a card.", variant: "destructive" });
-              }
-              setPendingApplyCard(null);
-            }
-          }}
-          onEligibilityComplete={() => setApplyEligibilityDone(true)}
-          onEligibilityReset={() => setApplyEligibilityDone(false)}
-          cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || ''}
-          cardName={pendingApplyCard?.card_name || pendingApplyCard?.name || ''}
-          networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-        />
         <Footer />
       </div>;
     }
@@ -1589,7 +1564,7 @@ const CardGenius = () => {
                 Welcome to Super Card Genius
               </DialogTitle>
               <DialogDescription className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                We help you find the <span className="font-semibold text-primary">best credit card</span> tailored to your unique spending habits.
+                We help you find the <span className="font-semibold text-accent-text">best credit card</span> tailored to your unique spending habits.
               </DialogDescription>
             </DialogHeader>
 
@@ -1755,22 +1730,6 @@ const CardGenius = () => {
         </div>
       </main>
     </div>
-    <EligibilityDialog
-      open={!!pendingApplyCard}
-      onOpenChange={(open) => {
-        if (!open) {
-          if (!applyEligibilityDone) {
-            toast({ title: "Eligibility Required", description: "Please complete eligibility check to apply for a card.", variant: "destructive" });
-          }
-          setPendingApplyCard(null);
-        }
-      }}
-      onEligibilityComplete={() => setApplyEligibilityDone(true)}
-      onEligibilityReset={() => setApplyEligibilityDone(false)}
-      cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || ''}
-      cardName={pendingApplyCard?.card_name || pendingApplyCard?.name || ''}
-      networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-    />
     <Footer />
   </>;
 };

@@ -357,7 +357,7 @@ export default function EligibilityDialog({
         onOpenChange={(resultOpen) => {
           setShowResult(resultOpen);
           if (!resultOpen) {
-            // Closing result dialog → propagate to parent (clears pendingApplyCard)
+            // Closing result dialog → propagate to parent
             onOpenChange(false);
           }
         }}

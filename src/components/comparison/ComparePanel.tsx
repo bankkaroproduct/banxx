@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { feeCalc } from '@/lib/feeUtils';
 import { redirectToCardApplication } from '@/utils/redirectHandler';
-import EligibilityDialog from '@/components/EligibilityDialog';
 import { cardService } from '@/services/cardService';
 import { getCardAlias, getCardKey } from '@/utils/cardAlias';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -30,8 +29,6 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
   const [searchResults, setSearchResults] = useState<any[][]>([[], [], []]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [detailViewCard, setDetailViewCard] = useState<any>(null);
-  const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-  const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
   const [detailViewOpen, setDetailViewOpen] = useState(false);
   const [allCards, setAllCards] = useState<any[]>([]);
   const [hydratedCards, setHydratedCards] = useState<Record<string, any>>({});
@@ -183,11 +180,8 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
   const activeCards = resolvedSlots.filter(Boolean);
 
   const handleApply = (card: any) => {
-    if (applyEligibilityDone) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setPendingApplyCard(card);
+    // Apply is not gated on an eligibility check.
+    redirectToCardApplication(card);
   };
 
   // When the panel opens with a preSelectedCard (e.g. from CardDetails), ensure it is in
@@ -577,22 +571,6 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
           )}
         </SheetContent>
       </Sheet>
-      <EligibilityDialog
-        open={!!pendingApplyCard}
-        onOpenChange={(open) => {
-          if (!open) {
-            if (!applyEligibilityDone) {
-              toast.error('Please complete eligibility check to apply for a card.');
-            }
-            setPendingApplyCard(null);
-          }
-        }}
-        onEligibilityComplete={() => setApplyEligibilityDone(true)}
-        onEligibilityReset={() => setApplyEligibilityDone(false)}
-        cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || getCardAlias(pendingApplyCard) || ''}
-        cardName={pendingApplyCard?.name || pendingApplyCard?.card_name || ''}
-        networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-      />
     </>
   );
 }

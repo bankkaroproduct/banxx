@@ -13,7 +13,6 @@ import { redirectToCardApplication } from "@/utils/redirectHandler";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import EligibilityDialog from "@/components/EligibilityDialog";
 import {
   trackBmcCardSelected,
   trackBmcSpendsFilled,
@@ -217,8 +216,6 @@ const BeatMyCard = () => {
   const [userCardData, setUserCardData] = useState<Card | null>(null);
   const [geniusCardData, setGeniusCardData] = useState<Card | null>(null);
   const [categorySavings, setCategorySavings] = useState<CategorySavings[]>([]);
-  const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-  const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
   useEffect(() => {
     fetchCards();
   }, []);
@@ -289,11 +286,8 @@ const BeatMyCard = () => {
     analytics.trackCardAction('Apply Now', card.name);
     analytics.trackBeatSelect(card.name);
     trackBmcApplyNowClicked(card.name, card.seo_card_alias, selectedCard?.name);
-    if (applyEligibilityDone) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setPendingApplyCard(card);
+    // Apply is not gated on an eligibility check.
+    redirectToCardApplication(card);
   };
   const calculateResults = async () => {
     if (!selectedCard) {
@@ -596,15 +590,21 @@ const BeatMyCard = () => {
 
               {/* Trust Indicators */}
               <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
-                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-secondary/10 text-secondary border-secondary/20 hover:bg-secondary/20 transition-colors">
+                {/* --secondary is a surface token (indigo-050, near white), so
+                    text-secondary rendered this chip at 1.1:1 — invisible. Its
+                    paired text token is --secondary-foreground. */}
+                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-secondary/10 text-secondary-foreground border-secondary/20 hover:bg-secondary/20 transition-colors">
                   <Sparkles className="w-4 h-4 mr-2" />
                   AI-Powered
                 </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-surface-elevated text-primary border-primary hover:bg-[#d4ecff] transition-colors">
+                {/* accent-text, not primary: --primary is the same saturated
+                    indigo in both themes and only reaches 2.85:1 on the dark
+                    elevated surface, while --accent-text lightens for dark. */}
+                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-surface-elevated text-accent-text border-primary hover:bg-[#d4ecff] transition-colors">
                   <Shield className="w-4 h-4 mr-2" />
                   Unbiased Results
                 </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/20 transition-colors">
+                <Badge variant="secondary" className="px-4 py-2 text-sm font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20 transition-colors">
                   <Zap className="w-4 h-4 mr-2" />
                   Instant Comparison
                 </Badge>
@@ -1078,22 +1078,6 @@ const BeatMyCard = () => {
             </section>
           </div>
         </div>
-        <EligibilityDialog
-          open={!!pendingApplyCard}
-          onOpenChange={(open) => {
-            if (!open) {
-              if (!applyEligibilityDone) {
-                toast.error('Please complete eligibility check to apply for a card.');
-              }
-              setPendingApplyCard(null);
-            }
-          }}
-          onEligibilityComplete={() => setApplyEligibilityDone(true)}
-          onEligibilityReset={() => setApplyEligibilityDone(false)}
-          cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || ''}
-          cardName={pendingApplyCard?.name || pendingApplyCard?.card_name || ''}
-          networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-        />
         <Footer />
       </>
     );

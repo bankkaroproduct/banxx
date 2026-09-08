@@ -9,7 +9,6 @@ import { Badge } from "./ui/badge";
 import { Star, ChevronDown } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
-import EligibilityDialog from "@/components/EligibilityDialog";
 import { toast } from "sonner";
 import { getCardAlias } from "@/utils/cardAlias";
 import { gsap } from "gsap";
@@ -137,16 +136,11 @@ const PopularCreditCards = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const [expandedMobileCard, setExpandedMobileCard] = useState<string | null>(null);
-  const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-  const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
 
   const handleApply = (card: any) => {
     analytics.trackCardAction('Apply Now', card.name);
-    if (applyEligibilityDone) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setPendingApplyCard(card);
+    // Apply is not gated on an eligibility check.
+    redirectToCardApplication(card);
   };
 
   useEffect(() => {
@@ -455,22 +449,6 @@ const PopularCreditCards = () => {
         </Tabs>
       </div>
     </section>
-    <EligibilityDialog
-      open={!!pendingApplyCard}
-      onOpenChange={(open) => {
-        if (!open) {
-          if (!applyEligibilityDone) {
-            toast.error('Please complete eligibility check to apply for a card.');
-          }
-          setPendingApplyCard(null);
-        }
-      }}
-      onEligibilityComplete={() => setApplyEligibilityDone(true)}
-      onEligibilityReset={() => setApplyEligibilityDone(false)}
-      cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || getCardAlias(pendingApplyCard) || ''}
-      cardName={pendingApplyCard?.name || pendingApplyCard?.card_name || ''}
-      networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-    />
     </>
   );
 };

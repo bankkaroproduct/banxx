@@ -46,7 +46,6 @@ import { CompareToggleIcon } from "@/components/comparison/CompareToggleIcon";
 import { ComparePill } from "@/components/comparison/ComparePill";
 import { useComparison } from "@/contexts/ComparisonContext";
 import { redirectToCardApplication } from "@/utils/redirectHandler";
-import EligibilityDialog from "@/components/EligibilityDialog";
 import { feeCalc } from "@/lib/feeUtils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -139,8 +138,6 @@ const CardListing = () => {
   const [eligibilityOpen, setEligibilityOpen] = useState(false);
   const [eligibilitySubmitted, setEligibilitySubmitted] = useState(false);
   const [eligibleCardAliases, setEligibleCardAliases] = useState<string[]>([]);
-  const [pendingApplyCard, setPendingApplyCard] = useState<any>(null);
-  const [applyEligibilityDone, setApplyEligibilityDone] = useState(false);
   const [showGeniusDialog, setShowGeniusDialog] = useState(false);
   const [geniusSpendingData, setGeniusSpendingData] = useState<SpendingData | null>(null);
   const [cardSavings, setCardSavings] = useState<Record<string, Record<string, number>>>({});
@@ -884,11 +881,10 @@ const CardListing = () => {
   const handleApplyClick = (card: any) => {
     analytics.trackCardAction('Apply Now', card.name);
     trackListingApplyNowClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, 'listing');
-    if (applyEligibilityDone) {
-      redirectToCardApplication(card);
-      return;
-    }
-    setPendingApplyCard(card);
+    // Apply is never gated on an eligibility check: the user goes straight to
+    // the bank's application. Eligibility remains available as its own
+    // deliberate action, but it no longer blocks the primary CTA.
+    redirectToCardApplication(card);
   };
 
   // Filter sidebar component
@@ -1703,24 +1699,6 @@ const CardListing = () => {
 
     {/* Genius Dialog */}
     <GeniusDialog open={showGeniusDialog} onOpenChange={setShowGeniusDialog} category={filters.category} onSubmit={handleGeniusSubmit} />
-
-    {/* Eligibility Dialog for Apply Now */}
-    <EligibilityDialog
-      open={!!pendingApplyCard}
-      onOpenChange={(open) => {
-        if (!open) {
-          if (!applyEligibilityDone) {
-            toast.error('Please complete eligibility check to apply for a card.');
-          }
-          setPendingApplyCard(null);
-        }
-      }}
-      onEligibilityComplete={() => setApplyEligibilityDone(true)}
-      onEligibilityReset={() => setApplyEligibilityDone(false)}
-      cardAlias={pendingApplyCard?.seo_card_alias || pendingApplyCard?.card_alias || getCardAlias(pendingApplyCard) || ''}
-      cardName={pendingApplyCard?.name || pendingApplyCard?.card_name || ''}
-      networkUrl={pendingApplyCard?.network_url || pendingApplyCard?.cg_network_url || pendingApplyCard?.ck_store_url || pendingApplyCard?.card_apply_link || ''}
-    />
 
 {/* Comparison Pill - visible on mobile & desktop */}
     <ComparePill />
