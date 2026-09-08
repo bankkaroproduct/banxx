@@ -350,7 +350,15 @@ export default function CardDetails() {
           background: card.card_bg_gradient || 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)'
         }}
       >
-        <div className="section-shell">
+        {/* Contrast scrim. card_bg_gradient is supplied per card by the partner
+            API, so it is an arbitrary colour the design cannot account for —
+            the Axis Flipkart gradient starts at a light violet where even pure
+            white text measures 3.41:1, below the 4.5:1 AA floor. Darkening the
+            backdrop makes the hero legible whatever gradient a card carries,
+            rather than tuning text colours per card. */}
+        <div aria-hidden="true" className="absolute inset-0 bg-black/40" />
+
+        <div className="section-shell relative z-10">
           <div className="flex flex-col-reverse lg:grid lg:grid-cols-2 gap-8 items-center">
             {/* Card Image */}
             <div className="relative animate-fade-in">
@@ -386,7 +394,11 @@ export default function CardDetails() {
                     <span className="text-yellow-400 mt-1">✓</span>
                     <div>
                       <p className="font-semibold">{usp.header}</p>
-                      <p className="text-sm text-muted-foreground">{usp.description}</p>
+                      {/* Not text-muted-foreground: that token is #5C5870, meant
+                          for the light page surface, and on this dark hero it
+                          rendered at 1.99:1 — the caption was effectively
+                          invisible. The siblings above already use white/N. */}
+                      <p className="text-sm text-white/85">{usp.description}</p>
                     </div>
                   </div>
                 ))}
