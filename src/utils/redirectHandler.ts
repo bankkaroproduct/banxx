@@ -10,6 +10,7 @@ import {
   appendAttribution,
   findPlaceholder,
   substitutePlaceholders,
+  PARTNER_ID,
 } from '@/lib/outboundUrl';
 
 const ALLOWED_DOMAINS = [
@@ -117,8 +118,21 @@ export const openRedirectInterstitial = async (params: RedirectParams): Promise<
     const json: any = await cardService.getExitLink(destinationUrl);
     console.log('[get-link] response:', json);
     const data = json?.data ?? json ?? {};
-    exitId =
+    const rawExitId =
       data.exitid ?? data.exit_id ?? data.exitId ?? data.exit_link_id ?? data.id ?? json?.exit_id ?? null;
+    // The partner API currently returns the destination URL in `exitid` rather
+    // than an id, and an empty string when exit-id creation fails outright
+    // (its createExitIdForIM throws intermittently). Either value would be
+    // reported to Journey Track as a conversion id and correlate with nothing,
+    // so treat anything URL-shaped or blank as "no exit id" instead. `??` alone
+    // does not cover this: it only falls through on null/undefined, so an
+    // empty string was passing straight through.
+    const looksLikeUrl = typeof rawExitId === 'string' && /^\s*https?:\/\//i.test(rawExitId);
+    const blank = typeof rawExitId === 'string' && rawExitId.trim() === '';
+    exitId = rawExitId == null || looksLikeUrl || blank ? null : rawExitId;
+    if (looksLikeUrl) {
+      console.warn('[get-link] exitid came back as a URL, not an id — dropping it', rawExitId);
+    }
     const resolved =
       data.url ?? data.link ?? data.redirect_url ?? data.exit_url ?? data.exit_link ?? null;
     if (typeof resolved === 'string' && resolved) finalUrl = resolved;
@@ -131,8 +145,12 @@ export const openRedirectInterstitial = async (params: RedirectParams): Promise<
   // the URL the user is actually sent to. Append-only and string-level: some
   // bank URLs are signed, so re-encoding or reordering the existing query can
   // invalidate them.
+  // p2 is this partner, constant for every visitor. p3 stays the DSA code from
+  // the entry link. appendAttribution skips either key the URL already carries,
+  // so a catalogue URL whose {user_id} macro already expanded to p2 does not get
+  // a second copy.
   const attribution = getStoredAttribution();
-  finalUrl = appendAttribution(finalUrl, { p2: attribution.p2, p3: attribution.p3 });
+  finalUrl = appendAttribution(finalUrl, { p2: PARTNER_ID, p3: attribution.p3 });
 
   // The guard that was missing. finalUrl comes back from get-link and used to
   // go straight into the interstitial and then window.location.replace()
@@ -285,13 +303,16 @@ export const isAllowedDomain = (url: string): boolean => {
  *   4. The whole function was wrapped in a try/catch returning the raw URL on
  *      parse failure, and an unsubstituted `{...}` can make `new URL()` throw,
  *      so the failure path returned the URL with every placeholder intact.
- *   5. It substituted the partner's BRAND NAME into `{user_id}`, putting a
- *      partner name into a per-user field for every user.
+ *   5. It substituted a name into `{user_id}` with no stated rationale.
  *
- * `{user_id}` now receives p2, the actual Credit Links user id.
+ * `{user_id}` is the network's p2 macro and receives PARTNER_ID. p2 identifies
+ * the partner sending the traffic, not the visitor — see PARTNER_ID in
+ * outboundUrl.ts for why the inbound p2 does not belong here.
+ *
+ * `.trim()` matters: every catalogue URL currently ships with trailing
+ * whitespace, which makes get-link reject it as malformed.
  */
-const cleanUrl = (rawUrl: string): string =>
-  substitutePlaceholders(rawUrl.trim(), { p2: getStoredAttribution().p2 });
+const cleanUrl = (rawUrl: string): string => substitutePlaceholders(rawUrl.trim());
 
 /**
  * Convenience helper to open card application flows from raw card objects

@@ -12,6 +12,21 @@ import type { Attribution } from './attribution';
 /** Matches any unfilled template placeholder such as {click_id} or {user_id}. */
 export const PLACEHOLDER_RE = /\{[^}]*\}/;
 
+/**
+ * The value the tracking network expects in p2: this partner, not the visitor.
+ *
+ * p2 means two different things either side of the redirect. On the inbound
+ * Credit Links entry link it is the visitor's user id (see attribution.ts); in
+ * the outbound TechTrack URL the p2 slot identifies the partner sending the
+ * traffic. Feeding the inbound value straight into the outbound slot conflated
+ * the two and sent a per-visitor id where a constant partner id belongs.
+ *
+ * Deliberately a literal rather than brandConfig.name: that is a display string
+ * driven by NEXT_PUBLIC_BRAND_NAME, and renaming the brand in an env var must
+ * not silently change how conversions are credited.
+ */
+export const PARTNER_ID = 'banxx';
+
 export class UnsubstitutedPlaceholderError extends Error {
   readonly url: string;
   readonly placeholder: string;
@@ -75,19 +90,12 @@ export const stripPlaceholderParams = (url: string): string => {
 /**
  * Substitute the placeholders we have real values for, then drop the rest.
  *
- * `{user_id}` receives p2, the Credit Links user id. The legacy implementation
- * substituted the partner's brand name here, which put a partner name into a
- * per-user field for every user.
+ * `{user_id}` is the network's p2 macro and receives PARTNER_ID, so p2 always
+ * identifies this partner. It takes no per-request value: the substitution is
+ * the same for every visitor, which is the point.
  */
-export const substitutePlaceholders = (
-  url: string,
-  attribution: Pick<Attribution, 'p2'> = {}
-): string => {
-  const withUserId = attribution.p2
-    ? url.replace(/\{user_id\}/g, encodeURIComponent(attribution.p2))
-    : url;
-  return stripPlaceholderParams(withUserId);
-};
+export const substitutePlaceholders = (url: string): string =>
+  stripPlaceholderParams(url.replace(/\{user_id\}/g, encodeURIComponent(PARTNER_ID)));
 
 /**
  * Append p2 and p3 to an already-resolved outbound URL.
@@ -100,12 +108,19 @@ export const appendAttribution = (
   url: string,
   attribution: Pick<Attribution, 'p2' | 'p3'> = {}
 ): string => {
+  const [base, fragment] = splitFragment(url);
+
+  // Skip a key the URL already carries. {user_id} in the catalogue URL expands
+  // to p2 during substitution, so appending p2 unconditionally emitted it twice
+  // ("...&p2=banxx&p2=banxx") and left the network to guess which one counts.
+  const alreadyHas = (key: string) =>
+    new RegExp(`[?&]${key}=`).test(base);
+
   const pairs: string[] = [];
-  if (attribution.p2) pairs.push(`p2=${encodeURIComponent(attribution.p2)}`);
-  if (attribution.p3) pairs.push(`p3=${encodeURIComponent(attribution.p3)}`);
+  if (attribution.p2 && !alreadyHas('p2')) pairs.push(`p2=${encodeURIComponent(attribution.p2)}`);
+  if (attribution.p3 && !alreadyHas('p3')) pairs.push(`p3=${encodeURIComponent(attribution.p3)}`);
   if (pairs.length === 0) return url;
 
-  const [base, fragment] = splitFragment(url);
   const separator = base.includes('?') ? (base.endsWith('?') || base.endsWith('&') ? '' : '&') : '?';
 
   return `${base}${separator}${pairs.join('&')}${fragment}`;

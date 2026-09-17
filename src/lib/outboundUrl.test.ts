@@ -6,6 +6,7 @@ import {
   findPlaceholder,
   stripPlaceholderParams,
   substitutePlaceholders,
+  PARTNER_ID,
 } from './outboundUrl';
 
 describe('appendAttribution', () => {
@@ -146,31 +147,60 @@ describe('stripPlaceholderParams', () => {
   });
 });
 
+describe('appendAttribution de-duplication', () => {
+  /**
+   * The catalogue URLs carry a {user_id} macro that expands to p2 during
+   * substitution. Appending p2 unconditionally then emitted it twice —
+   * "...&p2=banxx&p2=banxx" — leaving the tracking network to pick one.
+   */
+  it('does not append p2 when the URL already carries it', () => {
+    const substituted = substitutePlaceholders(
+      'https://track.techtrack.in/click?campaign_id=79&p1={click_id}&p2={user_id}'
+    );
+    const final = appendAttribution(substituted, { p2: PARTNER_ID, p3: 'DSA-7' });
+    expect((final.match(/[?&]p2=/g) || []).length).toBe(1);
+    expect(final).toBe('https://track.techtrack.in/click?campaign_id=79&p2=banxx&p3=DSA-7');
+  });
+
+  it('does not append p3 when the URL already carries it', () => {
+    const final = appendAttribution('https://b.example.com/a?p3=existing', { p3: 'DSA-7' });
+    expect(final).toBe('https://b.example.com/a?p3=existing');
+  });
+
+  it('still appends a key the URL does not have', () => {
+    const final = appendAttribution('https://b.example.com/a?p2=banxx', { p2: PARTNER_ID, p3: 'D1' });
+    expect(final).toBe('https://b.example.com/a?p2=banxx&p3=D1');
+  });
+
+  it('does not treat a key that merely appears inside a value as present', () => {
+    const final = appendAttribution('https://b.example.com/a?ref=xp2=y', { p2: PARTNER_ID });
+    expect(final).toBe('https://b.example.com/a?ref=xp2=y&p2=banxx');
+  });
+});
+
 describe('substitutePlaceholders', () => {
-  it('substitutes EVERY {user_id} occurrence, not just the first', () => {
-    expect(
-      substitutePlaceholders('https://b.example.com/a?u={user_id}&v={user_id}', { p2: 'user-42' })
-    ).toBe('https://b.example.com/a?u=user-42&v=user-42');
-  });
-
-  it('URL-encodes the substituted user id', () => {
-    expect(substitutePlaceholders('https://b.example.com/a?u={user_id}', { p2: 'a b/c' })).toBe(
-      'https://b.example.com/a?u=a%20b%2Fc'
+  it('substitutes EVERY {user_id} occurrence with the partner id, not just the first', () => {
+    expect(substitutePlaceholders('https://b.example.com/a?u={user_id}&v={user_id}')).toBe(
+      'https://b.example.com/a?u=banxx&v=banxx'
     );
   });
 
-  it('drops the pair when there is no p2 to substitute', () => {
-    expect(substitutePlaceholders('https://b.example.com/a?u={user_id}&y=2', {})).toBe(
-      'https://b.example.com/a?y=2'
+  /**
+   * p2 is the partner slot on the outbound side. It must not vary per visitor,
+   * so the inbound Credit Links user id is deliberately not threaded in here.
+   */
+  it('always substitutes the partner id, never a per-visitor value', () => {
+    expect(substitutePlaceholders('https://b.example.com/a?p2={user_id}')).toBe(
+      'https://b.example.com/a?p2=banxx'
     );
+    expect(PARTNER_ID).toBe('banxx');
   });
 
   it('substitutes what it can and strips the rest, leaving nothing unfilled', () => {
     const result = substitutePlaceholders(
-      'https://track.techtrack.in/click?campaign_id=99&u={user_id}&c={click_id}',
-      { p2: 'user-42' }
+      'https://track.techtrack.in/click?campaign_id=99&u={user_id}&c={click_id}'
     );
-    expect(result).toBe('https://track.techtrack.in/click?campaign_id=99&u=user-42');
+    expect(result).toBe('https://track.techtrack.in/click?campaign_id=99&u=banxx');
     expect(findPlaceholder(result)).toBeNull();
   });
 
@@ -180,6 +210,7 @@ describe('substitutePlaceholders', () => {
    * is string-level, so there is no parse to fail.
    */
   it('still strips placeholders from input that is not a parseable URL', () => {
-    expect(findPlaceholder(substitutePlaceholders('not a url?c={click_id}', {}))).toBeNull();
+    expect(findPlaceholder(substitutePlaceholders('not a url?c={click_id}'))).toBeNull();
   });
 });
+
