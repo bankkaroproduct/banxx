@@ -2,9 +2,7 @@
 import { ArrowRight, Sparkles, Swords, LayoutGrid } from "lucide-react";
 import { Link } from "@/components/Link";
 import {
-    trackHomepageSuperCardGeniusClicked,
-    trackHomepageBeatMyCardClicked,
-    trackHomepageCategoryCardGeniusClicked,
+  trackToolOpened,
 } from "@/services/journeyTrack";
 
 const tools = [
@@ -14,7 +12,7 @@ const tools = [
         description:
             "Enter what you spend each month and see which card returns the most, with the working shown.",
         to: "/card-genius",
-        track: () => trackHomepageSuperCardGeniusClicked("Super Card Genius", "tools_section"),
+        track: () => trackToolOpened("card_genius", "home_card"),
     },
     {
         icon: Swords,
@@ -22,7 +20,7 @@ const tools = [
         description:
             "Already have a card? Compare it against the market on rewards, fees and benefits.",
         to: "/beat-my-card",
-        track: () => trackHomepageBeatMyCardClicked("Beat My Card", "tools_section"),
+        track: () => trackToolOpened("beat_my_card", "home_card"),
     },
     {
         icon: LayoutGrid,
@@ -30,7 +28,7 @@ const tools = [
         description:
             "Find the strongest card for one category: fuel, travel, groceries, dining or utilities.",
         to: "/card-genius-category",
-        track: () => trackHomepageCategoryCardGeniusClicked("Category Card Genius", "tools_section"),
+        track: () => trackToolOpened("category_genius", "home_card"),
     },
 ];
 

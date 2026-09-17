@@ -1,45 +1,86 @@
 import ReactGA from "react-ga4";
-import { brandConfig } from "@/config/brand.config";
-import { authManager } from "@/services/authManager";
 import { getStoredAttribution, readAttributionFromParams, type Attribution } from "@/lib/attribution";
+import { authManager } from "@/services/authManager";
 
-const PARTNER_NAME = brandConfig.name;
+/**
+ * Journey Track instrumentation.
+ *
+ * One exported helper per event in Banxx_Journey_Event_Tracking_Plan.xlsx,
+ * which that sheet declares the single source of truth: "Any new event gets the
+ * next EVT ID and a row here before it is built — no undocumented events." The
+ * EVT id is on each helper so a reader can find the row.
+ *
+ * This replaced 86 ad-hoc event names that shared none of the spec's
+ * vocabulary — five different *_apply_now_clicked events for the one
+ * apply_clicked, two page views for /cards, a listing_page_view that re-fired
+ * on every filter change, and 16 trackers nothing called. Nothing had ever
+ * reached the backend (every request 401s), so there was no history to keep and
+ * the rename is a clean cutover rather than a migration.
+ *
+ * NOT YET IMPLEMENTED, deliberately:
+ *   - click_id (the spec's card-out join key) is deferred pending a decision on
+ *     who mints it, so apply_clicked and redirect_initiated carry everything
+ *     except that property and EVT-033 cardout_confirmed cannot be joined yet.
+ *   - EVT-033 cardout_confirmed is server-side and not a client concern.
+ *   - EVT-034..037 (stage 5, Outcome) are blank rows in the sheet.
+ */
+
+const PARTNER_ID = 'banxx';
+
+/* ------------------------------------------------------------------ *
+ * Identity and context
+ * ------------------------------------------------------------------ */
 
 function getSessionId(): string {
   if (typeof window === 'undefined') return '';
-  let sessionId = sessionStorage.getItem('bk_session_id');
-  if (!sessionId) {
-    sessionId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem('bk_session_id', sessionId);
+  let id = sessionStorage.getItem('bk_session_id');
+  if (!id) {
+    id = `s_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem('bk_session_id', id);
   }
-  return sessionId;
-}
-
-function getDeviceType(): string {
-  if (typeof window === 'undefined') return '';
-  return window.innerWidth < 768 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop';
-}
-
-interface JourneyEvent {
-  event_name: string;
-  metadata?: Record<string, unknown>;
+  return id;
 }
 
 /**
- * Attribution for the event about to be sent: utm_source/medium/campaign and
- * the partner ids p1-p3, from the entry URL.
+ * Stable per-browser id, required on every event.
  *
- * Read per event rather than captured once, because a session can be re-entered
- * on a different link.
+ * The spec says "first-party cookie". localStorage is used instead: it is
+ * equally first-party and equally durable, but is not attached to every HTTP
+ * request, so an id that exists only for analytics never travels to the card
+ * APIs. Same guarantee, smaller blast radius. No PII either way — it is random.
+ */
+function getUserPseudoId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    let id = localStorage.getItem('bk_user_pseudo_id');
+    if (!id) {
+      id = `u_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem('bk_user_pseudo_id', id);
+    }
+    return id;
+  } catch {
+    return '';
+  }
+}
+
+function getDeviceType(): 'mobile' | 'tablet' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  return window.innerWidth < 768 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop';
+}
+
+/**
+ * Attribution for the event being sent.
  *
- * The URL is consulted when the store is empty, which is not a rare edge: on a
- * partner landing the attribution is persisted by an effect in BanxxHome, while
- * the page-view event is fired by an effect in its child. React runs child
- * effects first, so home_page_view — the first and most valuable event of a
- * paid session — went out with no attribution at all. Falling back to the live
- * URL fixes that without depending on effect ordering.
+ * The sheet lists utm_* against session_start only, with "persist across the
+ * session". They go on every event instead: a session whose session_start is
+ * dropped would otherwise lose attribution entirely, and this way any single
+ * event is attributable without a backend join.
  *
- * Both sources compact, so absent values are omitted rather than sent blank.
+ * The URL is consulted when the store is empty. On a partner landing the
+ * attribution is persisted by an effect in BanxxHome while the first event
+ * fires from an effect in its child, and React runs child effects first — so
+ * without this the first and most valuable event of a paid session went out
+ * bare.
  */
 function currentAttribution(): Attribution {
   const stored = getStoredAttribution();
@@ -52,345 +93,422 @@ function currentAttribution(): Attribution {
   }
 }
 
-async function sendJourneyEvent(event: JourneyEvent): Promise<void> {
+/* ------------------------------------------------------------------ *
+ * Privacy helpers
+ * ------------------------------------------------------------------ */
+
+/**
+ * Monthly salary as a band.
+ *
+ * "BAND IT. Raw salary must never leave the client." The previous
+ * eligibility_checked event sent the exact figure and the full six-digit
+ * pincode; both are now reduced before they are ever put on the wire.
+ */
+export function salaryBand(monthlyIncome?: number | string | null): string | undefined {
+  const n = typeof monthlyIncome === 'string' ? Number(monthlyIncome.replace(/[^0-9.]/g, '')) : monthlyIncome;
+  if (n == null || !Number.isFinite(n) || n <= 0) return undefined;
+  const bands: [number, string][] = [
+    [25_000, '0-25k'],
+    [50_000, '25k-50k'],
+    [75_000, '50k-75k'],
+    [100_000, '75k-100k'],
+    [150_000, '100k-150k'],
+    [200_000, '150k-200k'],
+  ];
+  for (const [ceiling, label] of bands) if (n < ceiling) return label;
+  return '200k+';
+}
+
+/** First three digits of a pincode. Never the full six. */
+export function pincodePrefix(pincode?: string | null): string | undefined {
+  const digits = String(pincode ?? '').replace(/\D/g, '');
+  return digits.length >= 3 ? digits.slice(0, 3) : undefined;
+}
+
+/** salaried | self_employed, normalised from the app's several spellings. */
+export function salaryTypeOf(empStatus?: string | null): string | undefined {
+  if (!empStatus) return undefined;
+  return /self/i.test(empStatus) ? 'self_employed' : 'salaried';
+}
+
+/* ------------------------------------------------------------------ *
+ * Tools touched this session (apply_clicked.tools_used_in_session)
+ * ------------------------------------------------------------------ */
+
+const TOOLS_KEY = 'bk_tools_used';
+
+function noteToolUsed(tool: string): void {
+  if (typeof window === 'undefined') return;
   try {
+    const used = new Set(JSON.parse(sessionStorage.getItem(TOOLS_KEY) || '[]'));
+    used.add(tool);
+    sessionStorage.setItem(TOOLS_KEY, JSON.stringify([...used]));
+  } catch { /* analytics must never throw */ }
+}
+
+function toolsUsedInSession(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(sessionStorage.getItem(TOOLS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Transport
+ * ------------------------------------------------------------------ */
+
+type Props = Record<string, unknown>;
+
+/** Drop undefined/null/"" so absent properties are omitted, not sent blank. */
+const compact = (props: Props): Props => {
+  const out: Props = {};
+  for (const [k, v] of Object.entries(props)) {
+    if (v === undefined || v === null || v === '') continue;
+    out[k] = v;
+  }
+  return out;
+};
+
+async function send(eventName: string, props: Props = {}): Promise<void> {
+  try {
+    const metadata = compact(props);
     const attribution = currentAttribution();
 
-    // 1. Send to GA4
     try {
-      ReactGA.event(event.event_name, {
-        partner_name: PARTNER_NAME,
-        device_type: getDeviceType(),
-        ...attribution,
-        ...event.metadata,
-      });
+      ReactGA.event(eventName, { partner_id: PARTNER_ID, device_type: getDeviceType(), ...attribution, ...metadata });
     } catch { /* silent */ }
 
-    // 2. Send to JT backend with partner-token (backend resolves partner name from token)
-    //
-    // Attribution sits at the top level, alongside session_id and device_type:
-    // it is session context, not a property of the individual event, and it
-    // keeps the names identical to the entry-URL params the backend already
-    // speaks. Everything event-specific stays under metadata. If JT turns out
-    // to want it nested, this spread is the only line that moves.
+    // Identity and session context sit at the top level, which is where the
+    // spec's "All events" properties belong; everything event-specific stays
+    // under metadata, matching the envelope the JT endpoint already consumes.
     const payload = {
-      event_name: event.event_name,
+      event_name: eventName,
+      partner_id: PARTNER_ID,
       session_id: getSessionId(),
+      user_pseudo_id: getUserPseudoId(),
       device_type: getDeviceType(),
       ...attribution,
-      metadata: event.metadata || {},
+      metadata,
     };
 
-    // Get cached partner token
     let token = '';
     try { token = await authManager.getToken(); } catch { /* silent */ }
 
-    // Call local Next.js proxy (no CORS), which forwards with partner-token server-to-server
     fetch('/api/journey-track', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'partner-token': token } : {}),
-      },
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'partner-token': token } : {}) },
       body: JSON.stringify(payload),
       keepalive: true,
     }).catch(() => { /* silent */ });
   } catch {
-    // Never let tracking break the app
+    // Tracking must never break the app.
   }
 }
 
-// Generic escape hatch for any event not covered by a named helper below
-export const trackJourneyEvent = (eventName: string, metadata?: Record<string, unknown>) =>
-  sendJourneyEvent({ event_name: eventName, metadata });
-
-// ============================================================
-// HOMEPAGE (/) — 11 events
-// ============================================================
-export const trackHomePageView = () =>
-  sendJourneyEvent({ event_name: 'home_page_view' });
-
-export const trackHeroSearchBarFocused = () =>
-  sendJourneyEvent({ event_name: 'hero_search_bar_focused' });
-
-export const trackSearchSubmitted = (searchQuery?: string) =>
-  sendJourneyEvent({ event_name: 'search_submitted', metadata: { search_query: searchQuery } });
-
-export const trackSearchQueryTyped = (searchQuery?: string) =>
-  sendJourneyEvent({ event_name: 'search_query_typed', metadata: { search_query: searchQuery } });
-
-export const trackHeroExploreAllCardsClicked = (buttonPosition?: string) =>
-  sendJourneyEvent({ event_name: 'hero_explore_all_cards_clicked', metadata: { button_position: buttonPosition } });
-
-export const trackPicksCardDetailsClicked = (cardAlias?: string, cardName?: string, tabName?: string) =>
-  sendJourneyEvent({ event_name: 'picks_card_details_clicked', metadata: { card_alias: cardAlias, card_name: cardName, tab_name: tabName } });
-
-export const trackPicksLoadMoreClicked = (tabName?: string) =>
-  sendJourneyEvent({ event_name: 'picks_load_more_clicked', metadata: { tab_name: tabName } });
-
-export const trackHomepageSuperCardGeniusClicked = (toolName?: string, buttonPosition?: string) =>
-  sendJourneyEvent({ event_name: 'homepage_super_card_genius_clicked', metadata: { tool_name: toolName, button_position: buttonPosition } });
-
-export const trackHomepageBeatMyCardClicked = (toolName?: string, buttonPosition?: string) =>
-  sendJourneyEvent({ event_name: 'homepage_beat_my_card_clicked', metadata: { tool_name: toolName, button_position: buttonPosition } });
-
-export const trackHomepageCategoryCardGeniusClicked = (toolName?: string, buttonPosition?: string) =>
-  sendJourneyEvent({ event_name: 'homepage_category_card_genius_clicked', metadata: { tool_name: toolName, button_position: buttonPosition } });
-
-export const trackAboutSubscribeClicked = (destinationUrl?: string) =>
-  sendJourneyEvent({ event_name: 'about_subscribe_clicked', metadata: { destination_url: destinationUrl } });
-
-// ============================================================
-// DISCOVER (/discover) — 18 events
-// ============================================================
-export const trackDiscoverPageView = () =>
-  sendJourneyEvent({ event_name: 'discover_page_view' });
-
-export const trackDiscoverSearchBarFocused = () =>
-  sendJourneyEvent({ event_name: 'discover_search_bar_focused' });
-
-export const trackDiscoverSearchQueryTyped = (searchQuery?: string) =>
-  sendJourneyEvent({ event_name: 'discover_search_query_typed', metadata: { search_query: searchQuery } });
-
-export const trackDiscoverSearchSubmitted = (searchQuery?: string) =>
-  sendJourneyEvent({ event_name: 'discover_search_submitted', metadata: { search_query: searchQuery } });
-
-export const trackEligibilityDetailsFilled = (pincode?: string, monthlyIncome?: string | number, employmentStatus?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_details_filled', metadata: { pincode, monthly_income: monthlyIncome, employment_status: employmentStatus } });
-
-export const trackEligibilityCheckClicked = () =>
-  sendJourneyEvent({ event_name: 'eligibility_check_clicked' });
-
-export const trackEligibilityChecked = (pincode?: string, monthlyIncome?: string | number, employmentStatus?: string, eligibleCardsCount?: number) =>
-  sendJourneyEvent({ event_name: 'eligibility_checked', metadata: { pincode, monthly_income: monthlyIncome, employment_status: employmentStatus, eligible_cards_count: eligibleCardsCount } });
-
-export const trackFilterCategorySelected = (category?: string) =>
-  sendJourneyEvent({ event_name: 'filter_category_selected', metadata: { category } });
-
-export const trackFilterFeeRangeSelected = (feeRange?: string) =>
-  sendJourneyEvent({ event_name: 'filter_fee_range_selected', metadata: { fee_range: feeRange } });
-
-export const trackFilterNetworkSelected = (network?: string) =>
-  sendJourneyEvent({ event_name: 'filter_network_selected', metadata: { network } });
-
-export const trackListingFiltersSelected = (filterType?: string, filterValue?: string) =>
-  sendJourneyEvent({ event_name: 'listing_filters_selected', metadata: { filter_type: filterType, filter_value: filterValue } });
-
-export const trackFiltersCleared = () =>
-  sendJourneyEvent({ event_name: 'filters_cleared' });
-
-export const trackListingClearAllFilters = () =>
-  sendJourneyEvent({ event_name: 'listing_clear_all_filters' });
-
-export const trackListingPageView = (totalCards?: number, displayedCount?: number) =>
-  sendJourneyEvent({ event_name: 'listing_page_view', metadata: { total_cards: totalCards, displayed_count: displayedCount } });
-
-export const trackCardClicked = (cardAlias?: string, cardName?: string, bank?: string, position?: number) =>
-  sendJourneyEvent({ event_name: 'card_clicked', metadata: { card_alias: cardAlias, card_name: cardName, bank, position } });
-
-export const trackCardDetailsClicked = (cardAlias?: string, cardName?: string, position?: number) =>
-  sendJourneyEvent({ event_name: 'card_details_clicked', metadata: { card_alias: cardAlias, card_name: cardName, position } });
-
-export const trackListingApplyNowClicked = (cardAlias?: string, source?: string) =>
-  sendJourneyEvent({ event_name: 'listing_apply_now_clicked', metadata: { card_alias: cardAlias, source } });
-
-export const trackListingLoadMoreClicked = () =>
-  sendJourneyEvent({ event_name: 'listing_load_more_clicked' });
-
-// ============================================================
-// CARD DETAILS (/cards/{alias}) — 7 events
-// ============================================================
-export const trackCardDetailsPageView = (cardAlias?: string, cardName?: string, bank?: string, source?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_page_view', metadata: { card_alias: cardAlias, card_name: cardName, bank, source } });
-
-export const trackCardDetailsBackClicked = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_back_clicked', metadata: { card_alias: cardAlias } });
-
-export const trackCardDetailsBreadcrumbClicked = (linkName?: string, cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_breadcrumb_clicked', metadata: { link_name: linkName, card_alias: cardAlias } });
-
-export const trackCardDetailsBenefitsViewed = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_benefits_viewed', metadata: { card_alias: cardAlias } });
-
-export const trackCardDetailsApplyNowClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_apply_now_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-export const trackCardDetailsCheckEligibilityClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_check_eligibility_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-export const trackCardDetailsCompareClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'card_details_compare_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-// ============================================================
-// ABOUT (/about) — 3 events
-// ============================================================
-export const trackAboutPageView = () =>
-  sendJourneyEvent({ event_name: 'about_page_view' });
-
-export const trackAboutSubscribeSectionViewed = () =>
-  sendJourneyEvent({ event_name: 'about_subscribe_section_viewed_about' });
-
-export const trackAboutSubscribeClickedAbout = (destinationUrl?: string) =>
-  sendJourneyEvent({ event_name: 'about_subscribe_clicked_about', metadata: { destination_url: destinationUrl } });
-
-// ============================================================
-// SUPER CARD GENIUS (/tools/super-card-genius) — 7 events
-// ============================================================
-export const trackScgSpendsFilled = (spends?: unknown) =>
-  sendJourneyEvent({ event_name: 'scg_spends_filled', metadata: { spends } });
-
-export const trackScgCalculateClicked = () =>
-  sendJourneyEvent({ event_name: 'scg_calculate_clicked' });
-
-export const trackScgResultsView = (resultsCount?: number, topCard?: string) =>
-  sendJourneyEvent({ event_name: 'scg_results_view', metadata: { results_count: resultsCount, top_card: topCard } });
-
-export const trackScgResultCardClicked = (cardAlias?: string, cardName?: string, position?: number) =>
-  sendJourneyEvent({ event_name: 'scg_result_card_clicked', metadata: { card_alias: cardAlias, card_name: cardName, position } });
-
-export const trackScgApplyNowClicked = (recommendedCard?: string, cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'scg_apply_now_clicked', metadata: { recommended_card: recommendedCard, card_alias: cardAlias } });
-
-export const trackScgCompareClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'scg_compare_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-export const trackScgResetClicked = () =>
-  sendJourneyEvent({ event_name: 'scg_reset_clicked' });
-
-// ============================================================
-// CATEGORY CARD GENIUS (/tools/category-card-genius) — 8 events
-// ============================================================
-export const trackCcgCategorySelected = (category?: string) =>
-  sendJourneyEvent({ event_name: 'ccg_category_selected', metadata: { category } });
-
-export const trackCcgSpendsFilled = (category?: string, spends?: unknown) =>
-  sendJourneyEvent({ event_name: 'ccg_spends_filled', metadata: { category, spends } });
-
-export const trackCcgCalculateClicked = (category?: string) =>
-  sendJourneyEvent({ event_name: 'ccg_calculate_clicked', metadata: { category } });
-
-export const trackCcgResultsView = (category?: string, resultsCount?: number, topCard?: string) =>
-  sendJourneyEvent({ event_name: 'ccg_results_view', metadata: { category, results_count: resultsCount, top_card: topCard } });
-
-export const trackCcgResultCardClicked = (cardAlias?: string, cardName?: string, category?: string, position?: number) =>
-  sendJourneyEvent({ event_name: 'ccg_result_card_clicked', metadata: { card_alias: cardAlias, card_name: cardName, category, position } });
-
-export const trackCcgApplyNowClicked = (recommendedCard?: string, cardAlias?: string, category?: string) =>
-  sendJourneyEvent({ event_name: 'ccg_apply_now_clicked', metadata: { recommended_card: recommendedCard, card_alias: cardAlias, category } });
-
-export const trackCcgCompareClicked = (cardAlias?: string, cardName?: string, category?: string) =>
-  sendJourneyEvent({ event_name: 'ccg_compare_clicked', metadata: { card_alias: cardAlias, card_name: cardName, category } });
-
-export const trackCcgResetClicked = () =>
-  sendJourneyEvent({ event_name: 'ccg_reset_clicked' });
-
-// ============================================================
-// BEAT MY CARD (/tools/beat-my-card) — 8 events
-// ============================================================
-export const trackBmcCardSelected = (cardName?: string, cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'bmc_card_selected', metadata: { card_name: cardName, card_alias: cardAlias } });
-
-export const trackBmcSpendsFilled = (spends?: unknown) =>
-  sendJourneyEvent({ event_name: 'bmc_spends_filled', metadata: { spends } });
-
-export const trackBmcRevealCardClicked = (currentCard?: string) =>
-  sendJourneyEvent({ event_name: 'bmc_reveal_card_clicked', metadata: { current_card: currentCard } });
-
-export const trackBmcResultsView = (currentCard?: string, recommendedCard?: string, savings?: number) =>
-  sendJourneyEvent({ event_name: 'bmc_results_view', metadata: { current_card: currentCard, recommended_card: recommendedCard, savings } });
-
-export const trackBmcResultCardClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'bmc_result_card_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-export const trackBmcApplyNowClicked = (recommendedCard?: string, cardAlias?: string, currentCard?: string) =>
-  sendJourneyEvent({ event_name: 'bmc_apply_now_clicked', metadata: { recommended_card: recommendedCard, card_alias: cardAlias, current_card: currentCard } });
-
-export const trackBmcCompareClicked = (cardAlias?: string, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'bmc_compare_clicked', metadata: { card_alias: cardAlias, card_name: cardName } });
-
-export const trackBmcResetClicked = () =>
-  sendJourneyEvent({ event_name: 'bmc_reset_clicked' });
-
-// ============================================================
-// ALL PAGES (GLOBAL) — 25 events
-// ============================================================
-
-// --- Navigation ---
-export const trackNavLogoClicked = () =>
-  sendJourneyEvent({ event_name: 'nav_logo_clicked' });
-
-export const trackNavHomeClicked = (menuItem?: string) =>
-  sendJourneyEvent({ event_name: 'nav_home_clicked', metadata: { menu_item: menuItem } });
-
-export const trackNavAboutClicked = (menuItem?: string) =>
-  sendJourneyEvent({ event_name: 'nav_about_clicked', metadata: { menu_item: menuItem } });
-
-export const trackNavDiscoverClicked = (menuItem?: string) =>
-  sendJourneyEvent({ event_name: 'nav_discover_clicked', metadata: { menu_item: menuItem } });
-
-export const trackNavToolsDropdownOpened = () =>
-  sendJourneyEvent({ event_name: 'nav_tools_dropdown_opened' });
-
-export const trackNavToolSelected = (toolName?: string) =>
-  sendJourneyEvent({ event_name: 'nav_tool_selected', metadata: { tool_name: toolName } });
-
-export const trackNavBlogsClicked = (menuItem?: string) =>
-  sendJourneyEvent({ event_name: 'nav_blogs_clicked', metadata: { menu_item: menuItem } });
-
-export const trackNavSocialSelected = (socialPlatform?: string) =>
-  sendJourneyEvent({ event_name: 'nav_social_selected', metadata: { social_platform: socialPlatform } });
-
-// --- Footer ---
-export const trackFooterQuickLinkClicked = (linkName?: string) =>
-  sendJourneyEvent({ event_name: 'footer_quick_link_clicked', metadata: { link_name: linkName } });
-
-export const trackFooterEmailClicked = (email?: string) =>
-  sendJourneyEvent({ event_name: 'footer_email_clicked', metadata: { email } });
-
-export const trackFooterBankkaroLogoClicked = () =>
-  sendJourneyEvent({ event_name: 'footer_bankkaro_logo_clicked' });
-
-export const trackFooterPrivacyPolicyClicked = () =>
-  sendJourneyEvent({ event_name: 'footer_privacy_policy_clicked' });
-
-export const trackFooterTermsClicked = () =>
-  sendJourneyEvent({ event_name: 'footer_terms_clicked' });
-
-// --- Comparison ---
-export const trackCompareCardAdded = (cardId?: string | number, cardName?: string, source?: string) =>
-  sendJourneyEvent({ event_name: 'compare_card_added', metadata: { card_id: cardId, card_name: cardName, source } });
-
-export const trackCompareCardRemoved = (cardId?: string | number, cardName?: string) =>
-  sendJourneyEvent({ event_name: 'compare_card_removed', metadata: { card_id: cardId, card_name: cardName } });
-
-export const trackComparePanelViewed = (cardsCount?: number) =>
-  sendJourneyEvent({ event_name: 'compare_panel_viewed', metadata: { cards_count: cardsCount } });
-
-export const trackCompareNowClicked = (cardIds?: Array<string | number>) =>
-  sendJourneyEvent({ event_name: 'compare_now_clicked', metadata: { card_ids: cardIds } });
-
-// --- Eligibility Modal ---
-export const trackEligibilityModalDetailsFilled = (pincode?: string, monthlyIncome?: string | number, employmentStatus?: string, cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_details_filled', metadata: { pincode, monthly_income: monthlyIncome, employment_status: employmentStatus, card_alias: cardAlias } });
-
-export const trackEligibilityModalCheckClicked = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_check_clicked', metadata: { card_alias: cardAlias } });
-
-export const trackEligibilityModalCancelClicked = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_cancel_clicked', metadata: { card_alias: cardAlias } });
-
-export const trackEligibilityModalClosed = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_closed', metadata: { card_alias: cardAlias } });
-
-export const trackEligibilityModalSubmitted = (cardAlias?: string, pincode?: string, monthlyIncome?: string | number, employmentStatus?: string, eligible?: boolean) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_submitted', metadata: { card_alias: cardAlias, pincode, monthly_income: monthlyIncome, employment_status: employmentStatus, eligible } });
-
-export const trackEligibilityModalPassed = (cardAlias?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_passed', metadata: { card_alias: cardAlias } });
-
-export const trackEligibilityModalFailed = (cardAlias?: string, reason?: string) =>
-  sendJourneyEvent({ event_name: 'eligibility_modal_failed', metadata: { card_alias: cardAlias, reason } });
-
-// --- Redirect ---
-export const trackApplyRedirect = (cardAlias?: string, source?: string, exitId?: string | number) =>
-  sendJourneyEvent({ event_name: 'apply_redirect', metadata: { card_alias: cardAlias, source, exit_id: exitId } });
+/** Escape hatch for a genuinely new event. Add its row to the sheet first. */
+export const trackJourneyEvent = (eventName: string, props?: Props) => send(eventName, props);
+
+/* ================================================================== *
+ * 1. ACQUISITION
+ * ================================================================== */
+
+/**
+ * EVT-001 · session_start — first page load of a session.
+ *
+ * Guarded by the session id so it fires once per session rather than once per
+ * mount; it is the denominator for every rate in the funnel, so a double count
+ * here skews everything downstream.
+ */
+export const trackSessionStart = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (sessionStorage.getItem('bk_session_started')) return;
+    sessionStorage.setItem('bk_session_started', '1');
+  } catch { /* fall through and send anyway */ }
+  return send('session_start');
+};
+
+/** EVT-002 · page_view — every route change, including client-side. */
+export const trackPageView = (pagePath?: string, pageTitle?: string) =>
+  send('page_view', {
+    page_path: pagePath ?? (typeof window !== 'undefined' ? window.location.pathname : undefined),
+    page_title: pageTitle ?? (typeof document !== 'undefined' ? document.title : undefined),
+    referrer: typeof document !== 'undefined' ? document.referrer || undefined : undefined,
+  });
+
+/** EVT-003 · nav_clicked — any nav or footer link click. */
+export const trackNavClicked = (navItem: string, navLocation: 'header' | 'footer' | 'mobile') =>
+  send('nav_clicked', { nav_item: navItem, nav_location: navLocation });
+
+/** EVT-004 · theme_toggled — dark/light switch. */
+export const trackThemeToggled = (theme: 'dark' | 'light') =>
+  send('theme_toggled', { theme });
+
+/* ================================================================== *
+ * 2. INTENT
+ * ================================================================== */
+
+/** EVT-005 · eligibility_widget_viewed — hero form enters the viewport. */
+export const trackEligibilityWidgetViewed = () => send('eligibility_widget_viewed');
+
+/** EVT-006 · eligibility_field_entered — first valid entry per field. */
+export const trackEligibilityFieldEntered = (
+  fieldName: 'monthly_salary' | 'pincode' | 'salary_type'
+) => send('eligibility_field_entered', { field_name: fieldName });
+
+/**
+ * EVT-007 · eligibility_submitted — "Show my eligible cards" clicked.
+ *
+ * Takes the raw basis and reduces it here, so no call site has to remember to
+ * band a salary or truncate a pincode.
+ */
+export const trackEligibilitySubmitted = (basis: {
+  monthlyIncome?: number | string;
+  pincode?: string;
+  empStatus?: string;
+}) =>
+  send('eligibility_submitted', {
+    monthly_salary_band: salaryBand(basis.monthlyIncome),
+    pincode_prefix: pincodePrefix(basis.pincode),
+    salary_type: salaryTypeOf(basis.empStatus),
+  });
+
+/** EVT-008 · eligibility_results_viewed — the eligible list renders. Zero is a product failure; alert on it. */
+export const trackEligibilityResultsViewed = (
+  eligibleCardCount: number,
+  basis?: { monthlyIncome?: number | string }
+) =>
+  send('eligibility_results_viewed', {
+    eligible_card_count: eligibleCardCount,
+    monthly_salary_band: salaryBand(basis?.monthlyIncome),
+  });
+
+/** EVT-009 · catalog_viewed — the discover page loads. */
+export const trackCatalogViewed = (totalCards?: number, entrySource?: string) =>
+  send('catalog_viewed', { total_cards: totalCards, entry_source: entrySource });
+
+/** EVT-010 · catalog_search — search submitted. Zero-result queries drive catalogue gaps. */
+export const trackCatalogSearch = (query: string, resultsCount: number) =>
+  send('catalog_search', { query, results_count: resultsCount });
+
+/** EVT-011 · catalog_filter_applied — any filter or sort changed. */
+export const trackCatalogFilterApplied = (
+  filterType: string,
+  filterValue: unknown,
+  resultsCount?: number
+) => send('catalog_filter_applied', { filter_type: filterType, filter_value: filterValue, results_count: resultsCount });
+
+/** EVT-012 · catalog_load_more — "Load More Cards" clicked. */
+export const trackCatalogLoadMore = (pageNumber: number, cardsLoaded: number, cardsRemaining: number) =>
+  send('catalog_load_more', { page_number: pageNumber, cards_loaded: cardsLoaded, cards_remaining: cardsRemaining });
+
+/** EVT-013 · tool_opened — any Card Genius / Beat My Card entry point. */
+export const trackToolOpened = (
+  toolName: string,
+  entryPoint: 'nav' | 'home_card' | 'footer' | string
+) => {
+  noteToolUsed(toolName);
+  return send('tool_opened', { tool_name: toolName, entry_point: entryPoint });
+};
+
+/* ================================================================== *
+ * 3. EVALUATION
+ * ================================================================== */
+
+/** EVT-014 · cg_modal_viewed — the "Welcome to Super Card Genius" modal shows. */
+export const trackCgModalViewed = () => send('cg_modal_viewed');
+
+/** EVT-015 · cg_started — "Let's Get Started" clicked. Denominator for questionnaire completion. */
+export const trackCgStarted = () => {
+  noteToolUsed('card_genius');
+  return send('cg_started');
+};
+
+/** EVT-016 · cg_question_answered — a value is set on a question. */
+export const trackCgQuestionAnswered = (
+  questionIndex: number,
+  questionKey: string,
+  answerValue?: number,
+  inputMethod?: 'slider' | 'numeric'
+) =>
+  send('cg_question_answered', {
+    question_index: questionIndex,
+    question_key: questionKey,
+    answer_value: answerValue,
+    input_method: inputMethod,
+  });
+
+/** EVT-017 · cg_question_skipped — "Skip this question". A high rate means a bad question. */
+export const trackCgQuestionSkipped = (questionIndex: number, questionKey: string) =>
+  send('cg_question_skipped', { question_index: questionIndex, question_key: questionKey });
+
+/** EVT-018 · cg_skipped_all — "Skip all remaining questions". The impatience signal. */
+export const trackCgSkippedAll = (questionIndexAtSkip: number, questionsAnswered: number) =>
+  send('cg_skipped_all', { question_index_at_skip: questionIndexAtSkip, questions_answered: questionsAnswered });
+
+/** EVT-019 · cg_abandoned — exit before results. Fired on unload. */
+export const trackCgAbandoned = (lastQuestionIndex: number, questionsAnswered: number) =>
+  send('cg_abandoned', { last_question_index: lastQuestionIndex, questions_answered: questionsAnswered });
+
+/** EVT-020 · cg_results_viewed — the recommendation list renders. The core value moment. */
+export const trackCgResultsViewed = (args: {
+  questionsAnswered?: number;
+  questionsSkipped?: number;
+  totalMonthlySpend?: number;
+  projectedAnnualSavings?: number;
+}) =>
+  send('cg_results_viewed', {
+    questions_answered: args.questionsAnswered,
+    questions_skipped: args.questionsSkipped,
+    total_monthly_spend: args.totalMonthlySpend,
+    projected_annual_savings: args.projectedAnnualSavings,
+  });
+
+/** EVT-021 · category_genius_started — the category tool is opened. */
+export const trackCategoryGeniusStarted = () => {
+  noteToolUsed('category_genius');
+  return send('category_genius_started');
+};
+
+/** EVT-022 · category_selected — a spend category is chosen. Feeds catalogue priority. */
+export const trackCategorySelected = (category: string) =>
+  send('category_selected', { category });
+
+/** EVT-023 · category_results_viewed — category results render. */
+export const trackCategoryResultsViewed = (
+  category: string,
+  recommendedCardCount?: number,
+  topCardId?: string
+) =>
+  send('category_results_viewed', {
+    category,
+    recommended_card_count: recommendedCardCount,
+    top_card_id: topCardId,
+  });
+
+/** EVT-024 · beat_my_card_started — the tool is opened. */
+export const trackBeatMyCardStarted = () => {
+  noteToolUsed('beat_my_card');
+  return send('beat_my_card_started');
+};
+
+/** EVT-025 · beat_my_card_submitted — the existing card is submitted. Reveals the installed base. */
+export const trackBeatMyCardSubmitted = (currentCardId?: string, currentCardName?: string) =>
+  send('beat_my_card_submitted', { current_card_id: currentCardId, current_card_name: currentCardName });
+
+/** EVT-026 · beat_my_card_results_viewed — the comparison renders. */
+export const trackBeatMyCardResultsViewed = (args: {
+  currentCardId?: string;
+  betterCardCount?: number;
+  savingsDelta?: number;
+}) =>
+  send('beat_my_card_results_viewed', {
+    current_card_id: args.currentCardId,
+    better_card_count: args.betterCardCount,
+    savings_delta: args.savingsDelta,
+  });
+
+/**
+ * EVT-027 · card_detail_viewed — "Details" clicked, or the detail page loads.
+ *
+ * source_surface is what attributes a card-out back to the surface that earned
+ * it, so it is required rather than optional.
+ */
+export const trackCardDetailViewed = (args: {
+  cardId?: string;
+  cardName?: string;
+  bank?: string;
+  network?: string;
+  joiningFee?: number;
+  annualFee?: number;
+  sourceSurface?: string;
+  positionInList?: number;
+}) =>
+  send('card_detail_viewed', {
+    card_id: args.cardId,
+    card_name: args.cardName,
+    bank: args.bank,
+    network: args.network,
+    joining_fee: args.joiningFee,
+    annual_fee: args.annualFee,
+    source_surface: args.sourceSurface,
+    position_in_list: args.positionInList,
+  });
+
+/** EVT-028 · card_compare_added — compare ticked. */
+export const trackCardCompareAdded = (cardId?: string, compareCount?: number) =>
+  send('card_compare_added', { card_id: cardId, compare_count: compareCount });
+
+/** EVT-029 · card_compare_removed — compare unticked. */
+export const trackCardCompareRemoved = (cardId?: string, compareCount?: number) =>
+  send('card_compare_removed', { card_id: cardId, compare_count: compareCount });
+
+/** EVT-030 · card_compare_viewed — the comparison view is opened. */
+export const trackCardCompareViewed = (cardIds?: string[], compareCount?: number) =>
+  send('card_compare_viewed', { card_ids: cardIds, compare_count: compareCount });
+
+/* ================================================================== *
+ * 4. CONVERSION
+ * ================================================================== */
+
+/**
+ * EVT-031 · apply_clicked — "Apply Now" anywhere. The primary client-side
+ * card-out, and it must fire from every surface that offers an apply button.
+ *
+ * click_id is absent: the join key is still undecided, so this event cannot yet
+ * be tied to EVT-033 cardout_confirmed.
+ */
+export const trackApplyClicked = (args: {
+  cardId?: string;
+  cardName?: string;
+  bank?: string;
+  sourceSurface?: string;
+  positionInList?: number;
+  recommendationRank?: number;
+}) =>
+  send('apply_clicked', {
+    card_id: args.cardId,
+    card_name: args.cardName,
+    bank: args.bank,
+    source_surface: args.sourceSurface,
+    position_in_list: args.positionInList,
+    recommendation_rank: args.recommendationRank,
+    tools_used_in_session: toolsUsedInSession(),
+  });
+
+/**
+ * EVT-032 · redirect_initiated — handoff to the bank.
+ *
+ * The gap between this and apply_clicked is the broken-link rate, which is why
+ * it is a separate event rather than a property of the apply.
+ */
+export const trackRedirectInitiated = (cardId?: string, redirectDomain?: string) =>
+  send('redirect_initiated', { card_id: cardId, redirect_domain: redirectDomain });
+
+/* ================================================================== *
+ * CROSS-CUTTING
+ * ================================================================== */
+
+/** EVT-038 · error_shown — any user-facing error or empty state, zero-result eligibility included. */
+export const trackErrorShown = (errorType: string, errorMessage?: string) =>
+  send('error_shown', {
+    error_type: errorType,
+    error_message: errorMessage,
+    page_path: typeof window !== 'undefined' ? window.location.pathname : undefined,
+  });
+
+/** EVT-039 · support_contact_clicked — support@banxx.com clicked. */
+export const trackSupportContactClicked = (contactMethod = 'email') =>
+  send('support_contact_clicked', { contact_method: contactMethod });
+
+/** Domain of an outbound URL, for redirect_initiated. */
+export const redirectDomainOf = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+};

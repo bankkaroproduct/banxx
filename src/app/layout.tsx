@@ -3,6 +3,8 @@ import { Raleway } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { Analytics } from "@/components/Analytics";
+import { Suspense } from "react";
+import { JourneyTracker } from "@/components/JourneyTracker";
 import { brandConfig } from "@/config/brand.config";
 
 /**
@@ -41,6 +43,10 @@ export default function RootLayout({
         <html lang="en" suppressHydrationWarning>
             <body className={`${raleway.variable} font-sans`}>
                 <Analytics />
+                {/* EVT-001/EVT-002 for every route. Suspense because it reads searchParams. */}
+                <Suspense fallback={null}>
+                    <JourneyTracker />
+                </Suspense>
                 <Providers>{children}</Providers>
             </body>
         </html>

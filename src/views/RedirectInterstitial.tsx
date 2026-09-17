@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ExternalLink, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
-import { trackApplyRedirect } from '@/services/journeyTrack';
+import { trackRedirectInitiated, redirectDomainOf } from '@/services/journeyTrack';
 import { findPlaceholder } from '@/lib/outboundUrl';
 
 // The exit link is now resolved by the redirect handler BEFORE this page opens —
@@ -144,13 +144,13 @@ export default function RedirectInterstitial() {
 
     const exitId: string | number | null = searchParams.get('exitId');
 
-    // Journey Track: user is being redirected to the bank's application page,
-    // tagged with the exit_id so JT can correlate the exit.
+    // EVT-032 redirect_initiated. The gap between this and apply_clicked is the
+    // broken-link rate. click_id is not carried yet: the join key is undecided,
+    // so this cannot be tied to EVT-033 cardout_confirmed.
     try {
-      trackApplyRedirect(
+      trackRedirectInitiated(
         searchParams.get('alias') || state.cardName || undefined,
-        searchParams.get('source') || undefined,
-        exitId ?? undefined
+        redirectDomainOf(state.targetUrl || searchParams.get('url') || undefined)
       );
     } catch {
       /* never let tracking block the redirect */

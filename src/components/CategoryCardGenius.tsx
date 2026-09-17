@@ -1,13 +1,12 @@
 ﻿"use client";
 import { analytics } from "@/services/analytics";
 import {
-  trackCcgCategorySelected,
-  trackCcgSpendsFilled,
-  trackCcgCalculateClicked,
-  trackCcgResultsView,
-  trackCcgResultCardClicked,
-  trackCcgApplyNowClicked,
-  trackCcgResetClicked,
+  trackCategoryGeniusStarted,
+  trackCategorySelected,
+  trackCategoryResultsViewed,
+  trackCardDetailViewed,
+  trackApplyClicked,
+  trackErrorShown,
 } from "@/services/journeyTrack";
 import { Button } from "@/components/ui/button";
 import { ShoppingBag, Utensils, Fuel, Plane, Coffee, ShoppingCart, CreditCard, ChevronDown, TrendingUp, Sparkles, Loader2 } from "lucide-react";
@@ -313,7 +312,8 @@ useEffect(() => {
   const currentQuestion = selectedCategoryData?.questions[currentQuestionIndex];
   const handleCategorySelect = (categoryId: string) => {
     analytics.trackGeniusStart(categoryId);
-    trackCcgCategorySelected(categoryId);
+    trackCategoryGeniusStarted();   // EVT-021
+    trackCategorySelected(categoryId); // EVT-022
     // Clear persisted data for the old category before starting fresh
     cgcatSsClear(...Object.values(CGCAT_KEYS));
     setSelectedCategory(categoryId);
@@ -357,8 +357,6 @@ useEffect(() => {
       setCurrentQuestionIndex(0);
       return;
     }
-    trackCcgSpendsFilled(selectedCategory || undefined, responses);
-    trackCcgCalculateClicked(selectedCategory || undefined);
     setLoading(true);
     setCurrentFactIndex(0);
     try {
@@ -413,7 +411,14 @@ useEffect(() => {
 
       setResults(topCards);
       analytics.trackGeniusComplete(selectedCategory || 'unknown', topCards.length);
-      trackCcgResultsView(selectedCategory || undefined, topCards.length, topCards[0]?.card_name);
+      // EVT-023 category_results_viewed
+      trackCategoryResultsViewed(
+        selectedCategory || 'unknown',
+        topCards.length,
+        topCards[0]?.seo_card_alias
+      );
+      // Zero eligible picks is a product failure, not an empty state.
+      if (topCards.length === 0) trackErrorShown('no_eligible_cards', `category ${selectedCategory}`);
 
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({
@@ -429,7 +434,6 @@ useEffect(() => {
     }
   };
   const resetCalculator = () => {
-    trackCcgResetClicked();
     cgcatSsClear(...Object.values(CGCAT_KEYS));
     setSelectedCategory(null);
     setShowQuestions(false);
@@ -464,7 +468,11 @@ useEffect(() => {
       analytics.trackCardAction('View Details', matchingCard?.card_name || card.card_name || 'unknown');
 
       const alias = matchingCard?.seo_card_alias || matchingCard?.card_alias || matchingCard?.slug || card.seo_card_alias || card.card_alias || card.slug;
-      trackCcgResultCardClicked(alias, matchingCard?.card_name || card.card_name, selectedCategory || undefined);
+      trackCardDetailViewed({
+        cardId: alias,
+        cardName: matchingCard?.card_name || card.card_name,
+        sourceSurface: 'category_genius',
+      });
       if (alias) {
         router.push(`/cards/${alias}`);
       } else {
@@ -481,11 +489,12 @@ useEffect(() => {
       const matchingCard = findCatalogMatch(card) || card;
       analytics.trackGeniusResultClick(matchingCard.card_name || matchingCard.name || card.card_name || 'unknown');
       analytics.trackCardAction('Apply Now', matchingCard.card_name || matchingCard.name || card.card_name || 'unknown');
-      trackCcgApplyNowClicked(
-        matchingCard.card_name || matchingCard.name || card.card_name,
-        matchingCard.seo_card_alias || matchingCard.card_alias || card.seo_card_alias || card.card_alias,
-        selectedCategory || undefined
-      );
+      trackApplyClicked({
+        cardId: matchingCard.seo_card_alias || matchingCard.card_alias || card.seo_card_alias || card.card_alias,
+        cardName: matchingCard.card_name || matchingCard.name || card.card_name,
+        bank: matchingCard.banks?.name,
+        sourceSurface: 'category_genius',
+      });
 
       // Apply is not gated on an eligibility check.
       redirectToCardApplication(matchingCard);

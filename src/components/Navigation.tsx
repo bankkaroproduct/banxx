@@ -5,14 +5,7 @@ import { ChevronDown, X } from "lucide-react";
 import { Link } from "@/components/Link";
 import NavLink from "@/components/NavLink";
 import { analytics } from "@/services/analytics";
-import {
-  trackNavLogoClicked,
-  trackNavHomeClicked,
-  trackNavAboutClicked,
-  trackNavDiscoverClicked,
-  trackNavToolsDropdownOpened,
-  trackNavToolSelected,
-} from "@/services/journeyTrack";
+import { trackNavClicked, trackToolOpened } from "@/services/journeyTrack";
 import { brandConfig } from "@/config/brand.config";
 import { BrandWordmark } from "@/components/BrandWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -167,7 +160,7 @@ const MobileMenuOverlay = ({
             <Link
               to="/"
               className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
-              onClick={() => { trackNavHomeClicked('Home'); onClose(); }}
+              onClick={() => { trackNavClicked('home', 'mobile'); onClose(); }}
             >
               Home
             </Link>
@@ -176,7 +169,7 @@ const MobileMenuOverlay = ({
             <Link
               to="/about"
               className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
-              onClick={() => { trackNavAboutClicked('About'); onClose(); }}
+              onClick={() => { trackNavClicked('about', 'mobile'); onClose(); }}
             >
               About
             </Link>
@@ -185,7 +178,7 @@ const MobileMenuOverlay = ({
             <Link
               to="/cards"
               className="block rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold text-foreground hover:border-primary hover:bg-accent transition-all"
-              onClick={() => { trackNavDiscoverClicked('Discover'); onClose(); }}
+              onClick={() => { trackNavClicked('discover', 'mobile'); onClose(); }}
             >
               Discover
             </Link>
@@ -275,15 +268,15 @@ const Navigation = () => {
   }, [isMobileMenuOpen]);
 
   const navLinks: MobileNavItem[] = useMemo(() => ([
-    { label: 'Home', to: '/', action: () => { analytics.trackMenuClick('Home'); trackNavHomeClicked('Home'); } },
-    { label: 'About', to: '/about', action: () => { analytics.trackMenuClick('About'); trackNavAboutClicked('About'); } },
-    { label: 'Discover', to: '/cards', action: () => { analytics.trackMenuClick('Discover'); trackNavDiscoverClicked('Discover'); } },
+    { label: 'Home', to: '/', action: () => { analytics.trackMenuClick('Home'); trackNavClicked('home', 'header'); } },
+    { label: 'About', to: '/about', action: () => { analytics.trackMenuClick('About'); trackNavClicked('about', 'header'); } },
+    { label: 'Discover', to: '/cards', action: () => { analytics.trackMenuClick('Discover'); trackNavClicked('discover', 'header'); } },
   ]), []);
 
   const toolLinks: MobileNavItem[] = useMemo(() => ([
-    { label: 'Super Card Genius', description: 'AI finds the right card for you.', to: '/card-genius', action: () => { analytics.trackMenuClick('Super Card Genius'); trackNavToolSelected('Super Card Genius'); } },
-    { label: 'Category Card Genius', description: 'Find the best card for your spend style.', to: '/card-genius-category', action: () => { analytics.trackMenuClick('Category Card Genius'); trackNavToolSelected('Category Card Genius'); } },
-    { label: 'Beat My Card', description: 'See if you can upgrade your card.', to: '/beat-my-card', action: () => { analytics.trackMenuClick('Beat My Card'); trackNavToolSelected('Beat My Card'); } },
+    { label: 'Super Card Genius', description: 'AI finds the right card for you.', to: '/card-genius', action: () => { analytics.trackMenuClick('Super Card Genius'); trackToolOpened('card_genius', 'nav'); } },
+    { label: 'Category Card Genius', description: 'Find the best card for your spend style.', to: '/card-genius-category', action: () => { analytics.trackMenuClick('Category Card Genius'); trackToolOpened('category_genius', 'nav'); } },
+    { label: 'Beat My Card', description: 'See if you can upgrade your card.', to: '/beat-my-card', action: () => { analytics.trackMenuClick('Beat My Card'); trackToolOpened('beat_my_card', 'nav'); } },
   ]), []);
 
   const mobileSections: MobileSection[] = useMemo(() => ([
@@ -306,7 +299,7 @@ const Navigation = () => {
   >
     <div className="container mx-auto px-4 py-1.5 lg:py-2 overflow-visible">
       <div className="flex items-center justify-between gap-4">
-        <Link to="/" className="flex items-center gap-2.5" onClick={() => trackNavLogoClicked()}>
+        <Link to="/" className="flex items-center gap-2.5" onClick={() => trackNavClicked('logo', 'header')}>
           <BrandWordmark widthPx={124} className="flex-shrink-0" />
         </Link>
 
@@ -325,10 +318,10 @@ const Navigation = () => {
           ))}
 
           {/* Tools Dropdown */}
-          <div className="relative group" onMouseEnter={() => trackNavToolsDropdownOpened()}>
+          <div className="relative group" onMouseEnter={() => trackNavClicked('tools_dropdown', 'header')}>
             <button
               className="text-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
-              onClick={() => trackNavToolsDropdownOpened()}
+              onClick={() => trackNavClicked('tools_dropdown', 'header')}
             >
               Tools
               <ChevronDown className="w-4 h-4" />

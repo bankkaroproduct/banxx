@@ -5,7 +5,7 @@ import { X, ArrowRightLeft } from 'lucide-react';
 import { ComparePanel } from './ComparePanel';
 import { cn } from '@/lib/utils';
 import { getCardKey } from '@/utils/cardAlias';
-import { trackComparePanelViewed, trackCompareNowClicked } from '@/services/journeyTrack';
+import { trackCardCompareViewed } from '@/services/journeyTrack';
 
 export function ComparePill() {
   const { selectedCards, removeCard, clearAll } = useComparison();
@@ -14,7 +14,7 @@ export function ComparePill() {
 
   useEffect(() => {
     if (selectedCards.length > 0) {
-      if (!isVisible) trackComparePanelViewed(selectedCards.length);
+      if (!isVisible) trackCardCompareViewed(selectedCards.map(getCardKey), selectedCards.length);
       setIsVisible(true);
     } else {
       setIsVisible(false);
@@ -97,7 +97,7 @@ export function ComparePill() {
           {/* Compare Button */}
           <Button
             size="sm"
-            onClick={() => { trackCompareNowClicked(selectedCards.map(getCardKey)); setIsPanelOpen(true); }}
+            onClick={() => { trackCardCompareViewed(selectedCards.map(getCardKey), selectedCards.length); setIsPanelOpen(true); }}
             className="mt-1 w-full bg-card hover:bg-card/90 text-primary font-semibold shadow-lg text-xs sm:text-sm h-9 rounded-xl"
           >
             <ArrowRightLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />

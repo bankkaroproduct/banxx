@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { isValidPincode, normalizeMonthlySalary } from "@/lib/eligibilityParams";
+import {
+    trackEligibilityWidgetViewed,
+    trackEligibilityFieldEntered,
+} from "@/services/journeyTrack";
 
 /**
  * Partner entry form (test harness).
@@ -37,6 +41,38 @@ export default function PartnerEntryForm() {
     const [pincode, setPincode] = useState("");
     const [salaryType, setSalaryType] = useState<SalaryType>("s");
     const [submitting, setSubmitting] = useState(false);
+
+    /**
+     * EVT-005 eligibility_widget_viewed — the form entering the viewport is
+     * what separates a hero bounce from real intent, so it is observed rather
+     * than fired on mount.
+     */
+    const formRef = useRef<HTMLFormElement>(null);
+    const widgetSeen = useRef(false);
+    useEffect(() => {
+        const el = formRef.current;
+        if (!el || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((e) => e.isIntersecting) && !widgetSeen.current) {
+                    widgetSeen.current = true;
+                    trackEligibilityWidgetViewed();
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.4 }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    /** EVT-006 eligibility_field_entered — first VALID entry per field, once each. */
+    const fieldsSeen = useRef<Set<string>>(new Set());
+    const noteField = (field: "monthly_salary" | "pincode" | "salary_type", valid: boolean) => {
+        if (!valid || fieldsSeen.current.has(field)) return;
+        fieldsSeen.current.add(field);
+        trackEligibilityFieldEntered(field);
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,6 +105,7 @@ export default function PartnerEntryForm() {
 
     return (
         <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 text-left shadow-lg md:p-8"
         >
@@ -90,7 +127,10 @@ export default function PartnerEntryForm() {
                             inputMode="numeric"
                             placeholder="e.g. 50000"
                             value={salary}
-                            onChange={(e) => setSalary(e.target.value)}
+                            onChange={(e) => {
+                                setSalary(e.target.value);
+                                noteField("monthly_salary", normalizeMonthlySalary(e.target.value).ok);
+                            }}
                             className="figure"
                         />
                     </div>
@@ -102,7 +142,11 @@ export default function PartnerEntryForm() {
                             maxLength={6}
                             placeholder="e.g. 110001"
                             value={pincode}
-                            onChange={(e) => setPincode(e.target.value.replace(/[^0-9]/g, ""))}
+                            onChange={(e) => {
+                                const next = e.target.value.replace(/[^0-9]/g, "");
+                                setPincode(next);
+                                noteField("pincode", isValidPincode(next));
+                            }}
                             className="figure"
                         />
                     </div>
@@ -110,7 +154,10 @@ export default function PartnerEntryForm() {
 
                 <div className="space-y-1.5">
                     <Label htmlFor="entry-salary-type">Salary type</Label>
-                    <Select value={salaryType} onValueChange={(v) => setSalaryType(v as SalaryType)}>
+                    <Select value={salaryType} onValueChange={(v) => {
+                        setSalaryType(v as SalaryType);
+                        noteField("salary_type", true);
+                    }}>
                         <SelectTrigger id="entry-salary-type">
                             <SelectValue />
                         </SelectTrigger>

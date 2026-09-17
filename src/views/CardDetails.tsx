@@ -2,13 +2,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { analytics } from '@/services/analytics';
 import {
-  trackCardDetailsPageView,
-  trackCardDetailsBackClicked,
-  trackCardDetailsBreadcrumbClicked,
-  trackCardDetailsBenefitsViewed,
-  trackCardDetailsApplyNowClicked,
-  trackCardDetailsCheckEligibilityClicked,
-  trackCardDetailsCompareClicked,
+  trackCardDetailViewed,
+  trackApplyClicked,
+  trackNavClicked,
+  trackCardCompareViewed,
 } from '@/services/journeyTrack';
 import { useParams, useRouter } from 'next/navigation';
 import { Link } from '@/components/Link';
@@ -160,26 +157,16 @@ export default function CardDetails() {
   useEffect(() => {
     if (card) {
       const ref = typeof document !== 'undefined' ? document.referrer : '';
-      trackCardDetailsPageView(card.seo_card_alias || alias, card.name, card.banks?.name, ref);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card]);
-
-  // Fire benefits_viewed when the Key Benefits section scrolls into view
-  useEffect(() => {
-    if (!card || !benefitsRef.current || typeof IntersectionObserver === 'undefined') return;
-    let fired = false;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && !fired) {
-          fired = true;
-          trackCardDetailsBenefitsViewed(card.seo_card_alias || alias);
-          observer.disconnect();
-        }
+      // EVT-027 card_detail_viewed. source_surface is what attributes a
+      // card-out back to the surface that earned it.
+      trackCardDetailViewed({
+        cardId: card.seo_card_alias || alias,
+        cardName: card.name,
+        bank: card.banks?.name,
+        network: card.card_type || undefined,
+        sourceSurface: ref || 'direct',
       });
-    }, { threshold: 0.3 });
-    observer.observe(benefitsRef.current);
-    return () => observer.disconnect();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card]);
 
@@ -253,7 +240,12 @@ export default function CardDetails() {
   const handleApply = () => {
     if (!card) return;
     analytics.trackCardAction('Apply Now', card.name);
-    trackCardDetailsApplyNowClicked(card.seo_card_alias || alias, card.name);
+    trackApplyClicked({
+      cardId: card.seo_card_alias || alias,
+      cardName: card.name,
+      bank: card.banks?.name,
+      sourceSurface: 'card_detail',
+    });
     // Apply goes straight to the bank's application. The eligibility check is
     // still offered by its own button below, but it does not gate applying.
     redirectToCardApplication(card);
@@ -321,7 +313,6 @@ export default function CardDetails() {
             variant="outline"
             size="sm"
             onClick={() => {
-              trackCardDetailsBackClicked(card.seo_card_alias || alias);
               router.push('/cards');
               setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
             }}
@@ -332,9 +323,9 @@ export default function CardDetails() {
           </Button>
         </div>
         <div className="text-sm text-muted-foreground">
-          <Link to="/" className="hover:text-foreground" onClick={() => trackCardDetailsBreadcrumbClicked('Home', card.seo_card_alias || alias)}>Home</Link>
+          <Link to="/" className="hover:text-foreground" onClick={() => trackNavClicked('breadcrumb_Home', 'header')}>Home</Link>
           {' / '}
-          <Link to="/cards" className="hover:text-foreground" onClick={() => trackCardDetailsBreadcrumbClicked('Cards', card.seo_card_alias || alias)}>Cards</Link>
+          <Link to="/cards" className="hover:text-foreground" onClick={() => trackNavClicked('breadcrumb_Cards', 'header')}>Cards</Link>
           {' / '}
           <span className="text-foreground">{card.name}</span>
         </div>
@@ -435,7 +426,6 @@ export default function CardDetails() {
                     onClick={() => {
                       setShowEligibilityDialog(true);
                       analytics.trackCardAction('Check Eligibility', card.name);
-                      trackCardDetailsCheckEligibilityClicked(card.seo_card_alias || alias, card.name);
                       if (typeof window !== 'undefined' && (window as any).gtag) {
                         (window as any).gtag('event', 'eligibility_modal_open', {
                           card_alias: alias,
@@ -506,7 +496,7 @@ export default function CardDetails() {
                 startComparisonWith(card);
                 setIsComparePanelOpen(true);
                 analytics.trackCardAction('Compare', card.name);
-                trackCardDetailsCompareClicked(card.seo_card_alias || alias, card.name);
+                trackCardCompareViewed([card.seo_card_alias || alias], 1);
               }}
               className={`touch-target h-12 sm:h-14 px-4 sm:px-6 ${isSelected(card.seo_card_alias)
  ? "border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-lg"

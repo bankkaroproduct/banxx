@@ -2,24 +2,15 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { analytics } from "@/services/analytics";
 import {
-  trackDiscoverPageView,
-  trackDiscoverSearchBarFocused,
-  trackDiscoverSearchQueryTyped,
-  trackDiscoverSearchSubmitted,
-  trackEligibilityDetailsFilled,
-  trackEligibilityCheckClicked,
-  trackEligibilityChecked,
-  trackFilterCategorySelected,
-  trackFilterFeeRangeSelected,
-  trackFilterNetworkSelected,
-  trackListingFiltersSelected,
-  trackFiltersCleared,
-  trackListingClearAllFilters,
-  trackListingPageView,
-  trackCardClicked,
-  trackCardDetailsClicked,
-  trackListingApplyNowClicked,
-  trackListingLoadMoreClicked,
+  trackCatalogViewed,
+  trackCatalogSearch,
+  trackCatalogFilterApplied,
+  trackCatalogLoadMore,
+  trackEligibilitySubmitted,
+  trackEligibilityResultsViewed,
+  trackCardDetailViewed,
+  trackApplyClicked,
+  trackErrorShown,
 } from "@/services/journeyTrack";
 import { Link } from "@/components/Link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -252,14 +243,25 @@ const CardListing = () => {
 
   // Discover page view (fires once on mount)
   useEffect(() => {
-    trackDiscoverPageView();
   }, []);
 
-  // Listing view — fires when the card grid finishes loading
+  /**
+   * EVT-009 catalog_viewed — once the catalogue has actually loaded, so
+   * total_cards is populated.
+   *
+   * Guarded by a ref rather than keyed on [loading] alone: loading flips on
+   * every filter change and search, and a page view that re-fires per filter
+   * inflates the denominator of every rate in the funnel. Filters have their
+   * own event, EVT-011.
+   */
+  const catalogViewFired = useRef(false);
   useEffect(() => {
-    if (!loading) {
-      trackListingPageView(filteredCards.length, Math.min(displayCount, filteredCards.length));
-    }
+    if (loading || catalogViewFired.current) return;
+    catalogViewFired.current = true;
+    trackCatalogViewed(
+      filteredCards.length,
+      typeof document !== 'undefined' && document.referrer ? 'referral' : 'direct'
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
@@ -402,7 +404,7 @@ const CardListing = () => {
     if (searchQuery) {
       analytics.trackSearch(searchQuery);
     }
-    trackDiscoverSearchSubmitted(searchQuery);
+    trackCatalogSearch(searchQuery, filteredCards.length);
     setDisplayCount(12);
   };
 
@@ -535,7 +537,11 @@ const CardListing = () => {
     return base;
   }, [sortedCards, searchQuery, eligibilitySubmitted, eligibleCardAliases, eligibilityLocked, filters.category, filters.bank_names, bankIdToName, cardSavings]);
   const loadMore = () => {
-    trackListingLoadMoreClicked();
+    trackCatalogLoadMore(
+      Math.floor(displayCount / 12) + 1,
+      Math.min(displayCount + 12, filteredCards.length),
+      Math.max(filteredCards.length - (displayCount + 12), 0)
+    );
     setIsLoadingMore(true);
     setTimeout(() => {
       setDisplayCount(prev => prev + 12);
@@ -555,8 +561,7 @@ const CardListing = () => {
   const handleFilterChange = (filterType: string, value: string | boolean) => {
     if (filterType === 'category' && typeof value === 'string') {
       const normalized = normalizeCategory(value);
-      trackFilterCategorySelected(normalized);
-      trackListingFiltersSelected('category', normalized);
+      trackCatalogFilterApplied('category', normalized);
       setFilters((prev: any) => ({
         ...prev,
         category: normalized
@@ -568,9 +573,8 @@ const CardListing = () => {
 
     analytics.trackFilterChange(filterType, String(value));
     if (filterType === 'annualFees') {
-      trackFilterFeeRangeSelected(String(value));
     }
-    trackListingFiltersSelected(filterType, String(value));
+    trackCatalogFilterApplied(filterType, String(value));
 
     setFilters((prev: any) => ({
       ...prev,
@@ -592,8 +596,7 @@ const CardListing = () => {
     setSearchQuery(prev => (prev === urlQuery ? prev : urlQuery));
   }, [searchParams]);
   const clearFilters = () => {
-    trackFiltersCleared();
-    trackListingClearAllFilters();
+    trackCatalogFilterApplied('clear_all', true);
     syncCategoryParam('all');
     setFilters({
       banks_ids: [],
@@ -642,6 +645,16 @@ const CardListing = () => {
     const { announce = true } = options;
     setIsRecheckingEligibility(true);
 
+    // EVT-007 eligibility_submitted. Fired here rather than on the form button
+    // so a partner arrival, which supplies the basis by URL and never clicks
+    // anything, still registers step 2 of the funnel. Salary is banded and the
+    // pincode truncated inside the helper.
+    trackEligibilitySubmitted({
+      monthlyIncome: basis.inhandIncome,
+      pincode: basis.pincode,
+      empStatus: basis.empStatus,
+    });
+
     try {
       const response = await cardService.checkEligibility({
         pincode: basis.pincode,
@@ -665,12 +678,10 @@ const CardListing = () => {
         eligibleAliases: aliases,
       });
 
-      trackEligibilityChecked(
-        basis.pincode,
-        String(basis.inhandIncome),
-        basis.empStatus,
-        aliases.length
-      );
+      // EVT-008 eligibility_results_viewed. Zero is a product failure, so it
+      // is also EVT-038 error_shown.
+      trackEligibilityResultsViewed(aliases.length, { monthlyIncome: basis.inhandIncome });
+      if (aliases.length === 0) trackErrorShown('no_eligible_cards');
 
       if (aliases.length === 0) {
         toast.error("No Eligible Cards", {
@@ -710,7 +721,6 @@ const CardListing = () => {
   };
 
   const handleEligibilitySubmit = async () => {
-    trackEligibilityCheckClicked();
 
     // Shared validators, identical to the ones the URL adapter uses.
     if (!isValidPincode(eligibility.pincode)) {
@@ -727,7 +737,6 @@ const CardListing = () => {
       return;
     }
 
-    trackEligibilityDetailsFilled(eligibility.pincode, String(monthly.value), eligibility.empStatus);
     await runEligibility({
       pincode: eligibility.pincode,
       inhandIncome: monthly.value,
@@ -917,7 +926,12 @@ const CardListing = () => {
   };
   const handleApplyClick = (card: any) => {
     analytics.trackCardAction('Apply Now', card.name);
-    trackListingApplyNowClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, 'listing');
+    trackApplyClicked({
+      cardId: getCardAlias(card) || card.seo_card_alias || card.card_alias,
+      cardName: card.name,
+      bank: card.banks?.name,
+      sourceSurface: 'catalog',
+    });
     // Apply is never gated on an eligibility check: the user goes straight to
     // the bank's application. Eligibility remains available as its own
     // deliberate action, but it no longer blocks the primary CTA.
@@ -1040,7 +1054,7 @@ const CardListing = () => {
         {availableBanks.map(bank => <label key={bank} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
           <input type="checkbox" className="accent-primary w-5 h-5" checked={filters.bank_names.includes(bank)} onChange={e => {
             if (e.target.checked) {
-              trackListingFiltersSelected('bank', bank);
+              trackCatalogFilterApplied('bank', bank);
             }
             setFilters((prev: any) => ({
               ...prev,
@@ -1064,8 +1078,7 @@ const CardListing = () => {
         {['VISA', 'Mastercard', 'RuPay', 'AmericanExpress'].map(network => <label key={network} className="filter-option flex items-center gap-3 cursor-pointer px-3 py-3 transition-all touch-target">
           <input type="checkbox" className="accent-primary w-5 h-5" checked={filters.card_networks.includes(network)} onChange={e => {
             if (e.target.checked) {
-              trackFilterNetworkSelected(network);
-              trackListingFiltersSelected('network', network);
+              trackCatalogFilterApplied('network', network);
             }
             setFilters((prev: any) => ({
               ...prev,
@@ -1099,8 +1112,7 @@ const CardListing = () => {
                 type="text"
                 placeholder="Search by card name..."
                 value={searchQuery}
-                onFocus={() => trackDiscoverSearchBarFocused()}
-                onChange={e => { setSearchQuery(e.target.value); trackDiscoverSearchQueryTyped(e.target.value); }}
+                onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
                 className="hero-card-listing-input pl-10 sm:pl-12 pr-10 sm:pr-12 h-12 sm:h-14 text-sm sm:text-base md:text-lg rounded-xl touch-target"
               />
@@ -1496,7 +1508,7 @@ const CardListing = () => {
                 </Button>
               </div> : <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 md:gap-6 pb-6">
-                  {filteredCards.slice(0, displayCount).map((card, index) => <div key={card.id || index} onClick={() => trackCardClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, card.name, card.banks?.name, index)} className="card-item bg-card rounded-xl sm:rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-[1.02] lg:hover:-translate-y-2 flex flex-col h-full active:scale-[0.98]">
+                  {filteredCards.slice(0, displayCount).map((card, index) => <div key={card.id || index} className="card-item bg-card rounded-xl sm:rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all hover:scale-[1.02] lg:hover:-translate-y-2 flex flex-col h-full active:scale-[0.98]">
                     <div className="card-image-container relative aspect-[5/4] w-full bg-gradient-to-br from-surface-elevated to-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {/* Compare Toggle Icon - Top Right */}
                       <div className="absolute top-3 right-3 z-20">
@@ -1622,7 +1634,13 @@ const CardListing = () => {
                         <Link
                           to={`/cards/${getCardAlias(card) || card.id}`}
                           className={canApply(card) ? "flex-1 md:w-1/2 w-full" : "w-full"}
-                          onClick={() => { analytics.trackCardAction('View Details', card.name); trackCardDetailsClicked(getCardAlias(card) || card.seo_card_alias || card.card_alias, card.name, index); }}
+                          onClick={() => { analytics.trackCardAction('View Details', card.name); trackCardDetailViewed({
+                              cardId: getCardAlias(card) || card.seo_card_alias || card.card_alias,
+                              cardName: card.name,
+                              bank: card.banks?.name,
+                              sourceSurface: 'catalog',
+                              positionInList: index + 1,
+                            }); }}
                         >
                           <Button variant="outline" className="w-full h-11 md:h-10 text-sm font-semibold">
                             {canApply(card) ? 'Details' : 'View Details'}

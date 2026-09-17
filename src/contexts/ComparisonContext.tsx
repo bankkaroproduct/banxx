@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
 import { getCardKey } from '@/utils/cardAlias';
-import { trackCompareCardAdded, trackCompareCardRemoved } from '@/services/journeyTrack';
+import { trackCardCompareAdded, trackCardCompareRemoved } from '@/services/journeyTrack';
 
 interface ComparisonContextType {
   selectedCards: any[];
@@ -52,7 +52,7 @@ export function ComparisonProvider({ children, maxCompare = 2 }: { children: Rea
 
     if (isSelected(cardId)) {
       // Remove card
-      trackCompareCardRemoved(cardId, card.name || card.card_name);
+      trackCardCompareRemoved(cardId, selectedCards.length);
       setSelectedCards(prev => prev.filter(c => {
         const cId = getCardKey(c);
         return cId !== cardId;
@@ -78,7 +78,7 @@ export function ComparisonProvider({ children, maxCompare = 2 }: { children: Rea
         return;
       }
 
-      trackCompareCardAdded(cardId, card.name || card.card_name, card.source);
+      trackCardCompareAdded(cardId, selectedCards.length);
       setSelectedCards(prev => [...prev, card]);
       toast.success('Added to comparison', {
         description: `${selectedCards.length + 1} of ${maxCompare} cards selected`,
@@ -90,7 +90,7 @@ export function ComparisonProvider({ children, maxCompare = 2 }: { children: Rea
   const removeCard = (cardId: string) => {
     if (!cardId) return;
     const removed = selectedCards.find(c => getCardKey(c) === cardId);
-    if (removed) trackCompareCardRemoved(cardId, removed.name || removed.card_name);
+    if (removed) trackCardCompareRemoved(cardId, selectedCards.length);
     setSelectedCards(prev => prev.filter(c => getCardKey(c) !== cardId));
     if (removed) {
       toast.success('Removed from comparison', { description: removed.name || removed.card_name, position: 'top-right' });
@@ -115,7 +115,7 @@ export function ComparisonProvider({ children, maxCompare = 2 }: { children: Rea
 
   const startComparisonWith = (card: any) => {
     // Clear all existing selections and add this card as the first selection
-    trackCompareCardAdded(getCardKey(card), card.name || card.card_name, card.source);
+    trackCardCompareAdded(getCardKey(card), selectedCards.length);
     setSelectedCards([card]);
     toast.success('Comparison started', {
       description: `${card.name} selected. Add ${maxCompare - 1} more card${maxCompare > 2 ? 's' : ''} to compare.`,

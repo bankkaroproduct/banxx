@@ -17,13 +17,9 @@ import { loadEligibility, perCardKey, saveEligibility } from '@/lib/eligibilityS
 import { toast } from 'sonner';
 import EligibilityResultDialog from './EligibilityResultDialog';
 import {
-  trackEligibilityModalDetailsFilled,
-  trackEligibilityModalCheckClicked,
-  trackEligibilityModalCancelClicked,
-  trackEligibilityModalClosed,
-  trackEligibilityModalSubmitted,
-  trackEligibilityModalPassed,
-  trackEligibilityModalFailed,
+  trackEligibilitySubmitted,
+  trackEligibilityResultsViewed,
+  trackErrorShown,
 } from '@/services/journeyTrack';
 
 interface EligibilityDialogProps {
@@ -133,13 +129,17 @@ export default function EligibilityDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    trackEligibilityModalCheckClicked(cardAlias);
-
     if (!validateForm()) {
       return;
     }
 
-    trackEligibilityModalDetailsFilled(formData.pincode, formData.inhandIncome.replace(/,/g, ''), formData.empStatus, cardAlias);
+    // EVT-007 eligibility_submitted. The helper bands the salary and truncates
+    // the pincode; the event this replaced put both raw on the wire.
+    trackEligibilitySubmitted({
+      monthlyIncome: formData.inhandIncome.replace(/,/g, ''),
+      pincode: formData.pincode,
+      empStatus: formData.empStatus,
+    });
 
     setIsSubmitting(true);
 
@@ -181,13 +181,13 @@ export default function EligibilityDialog({
         });
       }
 
-      const incomeForEvent = formData.inhandIncome.replace(/,/g, '');
-      trackEligibilityModalSubmitted(cardAlias, formData.pincode, incomeForEvent, formData.empStatus, isEligible);
-      if (isEligible) {
-        trackEligibilityModalPassed(cardAlias);
-      } else {
-        trackEligibilityModalFailed(cardAlias, 'not_eligible');
-      }
+      // EVT-008 eligibility_results_viewed. One card is in scope here, so the
+      // count is 1 or 0. A zero return is a product failure, so it is also
+      // EVT-038 error_shown — the sheet calls out zero-result eligibility.
+      trackEligibilityResultsViewed(isEligible ? 1 : 0, {
+        monthlyIncome: formData.inhandIncome.replace(/,/g, ''),
+      });
+      if (!isEligible) trackErrorShown('no_eligible_cards', `not eligible for ${cardAlias}`);
 
       setEligibilityResult(response);
       setShowResult(true);
@@ -237,7 +237,7 @@ export default function EligibilityDialog({
 
   return (
     <>
-      <Dialog open={open && !showResult} onOpenChange={(o) => { if (!o) trackEligibilityModalClosed(cardAlias); onOpenChange(o); }}>
+      <Dialog open={open && !showResult} onOpenChange={(o) => { onOpenChange(o); }}>
         <DialogContent className="sm:max-w-[500px]" aria-labelledby="eligibility-dialog-title">
           <DialogHeader>
             <DialogTitle id="eligibility-dialog-title">Quick Eligibility Check - No Docs</DialogTitle>
@@ -326,7 +326,7 @@ export default function EligibilityDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => { trackEligibilityModalCancelClicked(cardAlias); onOpenChange(false); }}
+                onClick={() => { onOpenChange(false); }}
                 disabled={isSubmitting}
                 className="flex-1"
               >

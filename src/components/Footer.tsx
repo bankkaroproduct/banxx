@@ -4,13 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { brandConfig } from "@/config/brand.config";
 import { analytics } from "@/services/analytics";
-import {
-  trackFooterQuickLinkClicked,
-  trackFooterEmailClicked,
-  trackFooterBankkaroLogoClicked,
-  trackFooterPrivacyPolicyClicked,
-  trackFooterTermsClicked,
-} from "@/services/journeyTrack";
+import { trackNavClicked, trackSupportContactClicked } from "@/services/journeyTrack";
 
 const Footer = () => {
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -31,7 +25,7 @@ const Footer = () => {
                 src="/bankkaro-powered.svg"
                 alt="BankKaro"
                 className="h-5 w-auto cursor-pointer"
-                onClick={() => trackFooterBankkaroLogoClicked()}
+                onClick={() => trackNavClicked('bankkaro_logo', 'footer')}
               />
             </div>
           </div>
@@ -43,11 +37,11 @@ const Footer = () => {
       title: "Quick Links",
       content: (
         <ul className="space-y-3 text-sm opacity-80">
-          <li><Link to="/" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Home'); trackFooterQuickLinkClicked('Home'); }}>Home</Link></li>
-          <li><Link to="/cards" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Discover Cards'); trackFooterQuickLinkClicked('Discover Cards'); }}>Discover Cards</Link></li>
-          <li><Link to="/card-genius" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Card Genius'); trackFooterQuickLinkClicked('AI Card Genius'); }}>AI Card Genius</Link></li>
-          <li><Link to="/card-genius-category" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Category Card Genius'); trackFooterQuickLinkClicked('AI Category Card Genius'); }}>AI Category Card Genius</Link></li>
-          <li><Link to="/beat-my-card" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Beat My Card'); trackFooterQuickLinkClicked('Beat My Card'); }}>Beat My Card</Link></li>
+          <li><Link to="/" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Home'); trackNavClicked('Home', 'footer'); }}>Home</Link></li>
+          <li><Link to="/cards" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Discover Cards'); trackNavClicked('Discover Cards', 'footer'); }}>Discover Cards</Link></li>
+          <li><Link to="/card-genius" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Card Genius'); trackNavClicked('AI Card Genius', 'footer'); }}>AI Card Genius</Link></li>
+          <li><Link to="/card-genius-category" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('AI Category Card Genius'); trackNavClicked('AI Category Card Genius', 'footer'); }}>AI Category Card Genius</Link></li>
+          <li><Link to="/beat-my-card" className="hover:opacity-100 transition-opacity" onClick={() => { analytics.trackFooterClick('Beat My Card'); trackNavClicked('Beat My Card', 'footer'); }}>Beat My Card</Link></li>
         </ul>
       )
     },
@@ -57,7 +51,7 @@ const Footer = () => {
       content: (
         <div className="space-y-3 text-sm opacity-80">
           <p>Have questions? We're here to help!</p>
-          <p>  <a href={`mailto:${brandConfig.email}`} className="hover:opacity-100 transition-opacity" onClick={() => trackFooterEmailClicked(brandConfig.email)}>{brandConfig.email}</a></p>
+          <p>  <a href={`mailto:${brandConfig.email}`} className="hover:opacity-100 transition-opacity" onClick={() => trackSupportContactClicked('email')}>{brandConfig.email}</a></p>
           <p>Available 24/7 to assist you with your credit card queries.</p>
         </div>
       )
@@ -108,9 +102,9 @@ const Footer = () => {
             © {new Date().getFullYear()} Pouring Pounds India Pvt. Ltd. All rights reserved.
           </p>
           <div className="flex items-center gap-3 sm:gap-4 text-[10px] sm:text-xs opacity-60">
-            <a href="https://bankkaro.com/privacy-policy" target="_blank" className="hover:opacity-100 hover:text-primary transition-all" onClick={() => trackFooterPrivacyPolicyClicked()}>Privacy Policy</a>
+            <a href="https://bankkaro.com/privacy-policy" target="_blank" className="hover:opacity-100 hover:text-primary transition-all" onClick={() => trackNavClicked('privacy_policy', 'footer')}>Privacy Policy</a>
             <span className="hidden sm:inline">•</span>
-            <a href="https://bankkaro.com/terms-conditions" target="_blank" className="hover:opacity-100 hover:text-primary transition-all" onClick={() => trackFooterTermsClicked()}>Terms of Service</a>
+            <a href="https://bankkaro.com/terms-conditions" target="_blank" className="hover:opacity-100 hover:text-primary transition-all" onClick={() => trackNavClicked('terms_of_service', 'footer')}>Terms of Service</a>
           </div>
         </div>
       </div>

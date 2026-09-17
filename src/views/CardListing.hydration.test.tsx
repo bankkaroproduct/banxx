@@ -36,24 +36,15 @@ vi.mock('next/navigation', () => ({
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 
 vi.mock('@/services/journeyTrack', () => ({
-  trackCardClicked: vi.fn(),
-  trackCardDetailsClicked: vi.fn(),
-  trackDiscoverPageView: vi.fn(),
-  trackDiscoverSearchBarFocused: vi.fn(),
-  trackDiscoverSearchQueryTyped: vi.fn(),
-  trackDiscoverSearchSubmitted: vi.fn(),
-  trackEligibilityCheckClicked: vi.fn(),
-  trackEligibilityChecked: vi.fn(),
-  trackEligibilityDetailsFilled: vi.fn(),
-  trackFilterCategorySelected: vi.fn(),
-  trackFilterFeeRangeSelected: vi.fn(),
-  trackFilterNetworkSelected: vi.fn(),
-  trackFiltersCleared: vi.fn(),
-  trackListingApplyNowClicked: vi.fn(),
-  trackListingClearAllFilters: vi.fn(),
-  trackListingFiltersSelected: vi.fn(),
-  trackListingLoadMoreClicked: vi.fn(),
-  trackListingPageView: vi.fn(),
+  trackCatalogViewed: vi.fn(),
+  trackCatalogSearch: vi.fn(),
+  trackCatalogFilterApplied: vi.fn(),
+  trackCatalogLoadMore: vi.fn(),
+  trackEligibilitySubmitted: vi.fn(),
+  trackEligibilityResultsViewed: vi.fn(),
+  trackCardDetailViewed: vi.fn(),
+  trackApplyClicked: vi.fn(),
+  trackErrorShown: vi.fn(),
 }));
 
 vi.mock('@/services/analytics', () => ({

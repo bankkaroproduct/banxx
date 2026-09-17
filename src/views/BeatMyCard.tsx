@@ -16,13 +16,12 @@ import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import {
-  trackBmcCardSelected,
-  trackBmcSpendsFilled,
-  trackBmcRevealCardClicked,
-  trackBmcResultsView,
-  trackBmcResultCardClicked,
-  trackBmcApplyNowClicked,
-  trackBmcResetClicked,
+  trackBeatMyCardStarted,
+  trackBeatMyCardSubmitted,
+  trackBeatMyCardResultsViewed,
+  trackCardDetailViewed,
+  trackApplyClicked,
+  trackErrorShown,
 } from "@/services/journeyTrack";
 interface CategorySavings {
   category: string;
@@ -246,7 +245,8 @@ const BeatMyCard = () => {
   };
   const handleCardSelect = (card: Card) => {
     analytics.trackBeatStart(card.name);
-    trackBmcCardSelected(card.name, card.seo_card_alias);
+    trackBeatMyCardStarted();                                  // EVT-024
+    trackBeatMyCardSubmitted(card.seo_card_alias, card.name);   // EVT-025
     setSelectedCard(card);
     setStep('questions');
   };
@@ -287,7 +287,12 @@ const BeatMyCard = () => {
     if (!card) return;
     analytics.trackCardAction('Apply Now', card.name);
     analytics.trackBeatSelect(card.name);
-    trackBmcApplyNowClicked(card.name, card.seo_card_alias, selectedCard?.name);
+    trackApplyClicked({
+      cardId: card.seo_card_alias,
+      cardName: card.name,
+      bank: card.banks?.name,
+      sourceSurface: 'beat_my_card',
+    });
     // Apply is not gated on an eligibility check.
     redirectToCardApplication(card);
   };
@@ -296,8 +301,6 @@ const BeatMyCard = () => {
       toast.error("No card selected");
       return;
     }
-    trackBmcSpendsFilled(responses);
-    trackBmcRevealCardClicked(selectedCard.name);
     setIsCalculating(true);
     try {
       // Ensure all required fields are present with default value of 0
@@ -431,7 +434,12 @@ const BeatMyCard = () => {
           if (userCardData && geniusCardData) {
             const savingsDiff = (geniusCardData.annual_saving || 0) - (userCardData.annual_saving || 0);
             analytics.trackBeatCompare(userCardData.name, geniusCardData.name, savingsDiff);
-            trackBmcResultsView(userCardData.name, geniusCardData.name, savingsDiff);
+            // EVT-026 beat_my_card_results_viewed
+            trackBeatMyCardResultsViewed({
+              currentCardId: userCardData.seo_card_alias,
+              betterCardCount: savingsDiff > 0 ? 1 : 0,
+              savingsDelta: savingsDiff,
+            });
           }
 
           setStep('results');
@@ -831,7 +839,6 @@ const BeatMyCard = () => {
               <Button
                 variant="outline"
                 onClick={() => {
-                  trackBmcResetClicked();
                   setStep('select');
                   setCurrentStep(0);
                   setResponses({});
@@ -912,7 +919,7 @@ const BeatMyCard = () => {
                 return (
                   <div
                     key={card.id || index}
-                    onClick={() => { if (index === 1) trackBmcResultCardClicked(card.seo_card_alias, card.name); }}
+                    onClick={() => { if (index === 1) trackCardDetailViewed({ cardId: card.seo_card_alias, cardName: card.name, sourceSurface: 'beat_my_card' }); }}
                     className={`relative bg-card border rounded-3xl p-6 shadow-lg transition-all ${isWinnerCard ? 'border-4 border-primary shadow-glow scale-[1.01]' : 'border-border'
  }`}
                   >
@@ -1068,7 +1075,6 @@ const BeatMyCard = () => {
                   size="lg"
                   className="w-full md:w-auto text-lg"
                   onClick={() => {
-                    trackBmcResetClicked();
                     setStep('select');
                     setCurrentStep(0);
                     setResponses({});

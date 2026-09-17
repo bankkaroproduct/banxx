@@ -1,12 +1,10 @@
 "use client";
-import { useEffect } from "react";
 import { FileX2, ListChecks, Landmark, IndianRupee } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import BanxxToolsGrid from "@/components/BanxxToolsGrid";
 import PartnerEntryForm from "@/components/PartnerEntryForm";
 import { brandConfig } from "@/config/brand.config";
-import { trackHomePageView } from "@/services/journeyTrack";
 
 /**
  * Value propositions, deliberately non-numeric.
@@ -26,10 +24,6 @@ const VALUE_PROPS = [
 ];
 
 export default function BanxxLanding() {
-    useEffect(() => {
-        trackHomePageView();
-    }, []);
-
     return (
         <div className="flex min-h-screen flex-col">
             <Navigation />

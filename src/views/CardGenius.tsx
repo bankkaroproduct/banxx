@@ -23,12 +23,15 @@ import { feeCalc } from "@/lib/feeUtils";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import {
-  trackScgSpendsFilled,
-  trackScgCalculateClicked,
-  trackScgResultsView,
-  trackScgResultCardClicked,
-  trackScgApplyNowClicked,
-  trackScgResetClicked,
+  trackCgModalViewed,
+  trackCgStarted,
+  trackCgQuestionAnswered,
+  trackCgQuestionSkipped,
+  trackCgSkippedAll,
+  trackCgAbandoned,
+  trackCgResultsViewed,
+  trackCardDetailViewed,
+  trackApplyClicked,
 } from "@/services/journeyTrack";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -242,6 +245,8 @@ const CardGenius = () => {
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const [results, setResults] = useState<CardGeniusResult[]>(() => ssGet(CG_KEYS.results, []));
   const [showResults, setShowResults] = useState<boolean>(() => ssGet(CG_KEYS.showResults, false));
+  /** Set when the questionnaire is entered, so a bounce off the modal is not an abandon. */
+  const hasStarted = useRef(false);
   const [expandedCards, setExpandedCards] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<'quick' | 'detailed'>('quick');
   const [selectedCard, setSelectedCard] = useState<CardGeniusResult | null>(null);
@@ -275,6 +280,7 @@ const CardGenius = () => {
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
   useEffect(() => {
     setShowWelcomeDialog(true);
+    trackCgModalViewed(); // EVT-014
   }, []);
   useEffect(() => {
     if (selectedCard?.spending_breakdown) {
@@ -382,7 +388,33 @@ const CardGenius = () => {
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [selectedCard]);
+  /**
+   * EVT-019 cg_abandoned — exit before results.
+   *
+   * pagehide rather than beforeunload: beforeunload does not fire reliably on
+   * mobile Safari, and the tracker already uses keepalive so the request
+   * survives the teardown.
+   */
+  useEffect(() => {
+    const onLeave = () => {
+      if (showResults || !hasStarted.current) return;
+      trackCgAbandoned(
+        currentStep + 1,
+        Object.values(responses).filter((v) => Number(v) > 0).length
+      );
+    };
+    window.addEventListener('pagehide', onLeave);
+    return () => window.removeEventListener('pagehide', onLeave);
+  }, [showResults, currentStep, responses]);
+
   const handleNext = async () => {
+    // EVT-016 cg_question_answered — recorded on leaving a question that has a
+    // value, so per-question drop-off can be read across all 21.
+    const q = questions[currentStep];
+    const answer = q ? Number((responses as Record<string, unknown>)[q.field as string] ?? 0) : 0;
+    if (q && answer > 0) {
+      trackCgQuestionAnswered(currentStep + 1, String(q.field), answer, 'numeric');
+    }
     if (currentStep < questions.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
@@ -408,8 +440,6 @@ const CardGenius = () => {
       return;
     }
 
-    trackScgSpendsFilled(responses);
-    trackScgCalculateClicked();
 
     setIsCalculating(true);
 
@@ -457,7 +487,12 @@ const CardGenius = () => {
 
       setResults(enrichedResults);
       setShowResults(true);
-      trackScgResultsView(enrichedResults.length, enrichedResults[0]?.card_name);
+      // EVT-020 cg_results_viewed — the core value moment.
+      trackCgResultsViewed({
+        questionsAnswered: Object.values(responses).filter((v) => Number(v) > 0).length,
+        totalMonthlySpend: Object.values(responses).reduce((a, v) => a + (Number(v) || 0), 0),
+        projectedAnnualSavings: enrichedResults[0]?.net_savings,
+      });
     } catch (error) {
       console.error('Error calculating results:', error);
       toast({
@@ -475,12 +510,20 @@ const CardGenius = () => {
   };
   const handleApplyFromDetail = () => {
     if (!selectedCard) return;
-    trackScgApplyNowClicked(selectedCard.card_name, selectedCard.seo_card_alias);
+    trackApplyClicked({
+      cardId: selectedCard.seo_card_alias,
+      cardName: selectedCard.card_name,
+      sourceSurface: 'card_genius',
+    });
     // Apply is not gated on an eligibility check.
     redirectToCardApplication(selectedCard);
   };
   const handleCardSelect = (card: CardGeniusResult) => {
-    trackScgResultCardClicked(card.seo_card_alias, card.card_name);
+    trackCardDetailViewed({
+      cardId: card.seo_card_alias,
+      cardName: card.card_name,
+      sourceSurface: 'card_genius',
+    });
     setSelectedCard(card);
     // Smooth scroll to top
     window.scrollTo({
@@ -493,7 +536,11 @@ const CardGenius = () => {
       event.stopPropagation();
       event.preventDefault();
     }
-    trackScgApplyNowClicked(card.card_name, card.seo_card_alias);
+    trackApplyClicked({
+      cardId: card.seo_card_alias,
+      cardName: card.card_name,
+      sourceSurface: 'card_genius',
+    });
     // Apply is not gated on an eligibility check.
     redirectToCardApplication(card);
   };
@@ -804,7 +851,6 @@ const CardGenius = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button onClick={() => {
-              trackScgResetClicked();
               ssClear(...Object.values(CG_KEYS));
               setShowResults(false);
               setCurrentStep(0);
@@ -813,7 +859,6 @@ const CardGenius = () => {
               Recalculate
             </Button>
             <Button variant="outline" size="lg" onClick={() => {
-              trackScgResetClicked();
               ssClear(...Object.values(CG_KEYS));
               setShowResults(false);
               setSelectedCard(null);
@@ -1540,7 +1585,6 @@ const CardGenius = () => {
         {/* Start Over Button */}
         <div className="mt-8 text-center">
           <Button variant="outline" size="lg" onClick={() => {
-            trackScgResetClicked();
             ssClear(...Object.values(CG_KEYS));
             setShowResults(false);
             setCurrentStep(0);
@@ -1611,7 +1655,7 @@ const CardGenius = () => {
               </div>
             </div>
 
-            <Button size="lg" onClick={() => setShowWelcomeDialog(false)} className="w-full shadow-lg">
+            <Button size="lg" onClick={() => { setShowWelcomeDialog(false); hasStarted.current = true; trackCgStarted(); }} className="w-full shadow-lg">
               Let's Get Started
               <ArrowRight className="ml-2" />
             </Button>
@@ -1703,6 +1747,10 @@ const CardGenius = () => {
                     });
                     return;
                   }
+                  trackCgSkippedAll(
+                    currentStep + 1,
+                    Object.values(responses).filter((v) => Number(v) > 0).length
+                  ); // EVT-018
                   setCurrentStep(questions.length - 1);
                 }}
                 className="w-full sm:flex-1 touch-target cg-nav-btn cg-skip-all-btn"
@@ -1731,7 +1779,11 @@ const CardGenius = () => {
           {/* Skip Option */}
           <div className="text-center mt-6">
             <button
-              onClick={handleNext}
+              onClick={() => {
+                const q = questions[currentStep];
+                if (q) trackCgQuestionSkipped(currentStep + 1, String(q.field)); // EVT-017
+                handleNext();
+              }}
               className="text-muted-foreground hover:text-primary font-medium transition-colors cg-skip-question-link"
               aria-label="Skip this question"
             >
