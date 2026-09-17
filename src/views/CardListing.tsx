@@ -621,8 +621,11 @@ const CardListing = () => {
       });
     }
 
-    // Trigger API call (eligibility, if locked, is re-applied client-side).
-    fetchCards();
+    // No fetchCards() here. setFilters above replaces the filters object, and
+    // the effect on [filters] refetches for us. Calling it directly as well
+    // started a second request that aborted the first, and the survivor never
+    // resolved — so "Clear all" showed "All Cards" selected while still
+    // displaying the previous category's results.
   };
   /**
    * Run the eligibility check and apply the result.

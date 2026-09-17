@@ -110,25 +110,47 @@ export const cardService = {
   /**
    * Partner card listing.
    *
-   * IMPORTANT: this endpoint is called as a GET and only `slug` and `sort_by`
-   * reach the network. It does NOT filter by eligibility, bank, network, fee or
-   * credit score. The previous signature accepted all of those plus an
-   * `eligiblityPayload`, built a query string from two of them, and silently
-   * discarded the rest, so callers were constructing payloads that went
-   * nowhere. The signature is now limited to what is actually sent.
+   * POST, not GET. Per the Great.Cards partner guide, GET /cardgenius/cards is
+   * the unfiltered catalogue and the filters are only read from a POST body.
+   * Sent as a query string on a GET they are ignored in silence — which is why
+   * picking a category changed nothing: `?slug=best-fuel-credit-card` returned
+   * the same 170 cards as no slug at all, while the same slug in a POST body
+   * returns 14.
    *
-   * Consequence for eligibility: filtering happens client-side against the
-   * aliases returned by checkEligibility.
+   * Of the filters the guide documents, only two are actually honoured:
+   *   - slug, from a tag's seo_alias
+   *   - eligiblityPayload — spelled exactly like that, missing the second "i".
+   *     The correctly spelled `eligibilityPayload` is ignored.
+   * free_cards, card_networks, annualFees and credit_score all return the full
+   * catalogue, so those stay client-side in CardListing.
+   *
+   * Response shape differs between the two verbs: GET returns `data` as an
+   * array, POST returns `{ cards, filteredCards, tag, ... }`. Callers already
+   * handle both.
    */
   async getCardListing(
-    params: { slug?: string; sort_by?: string },
+    params: {
+      slug?: string;
+      sort_by?: string;
+      eligiblityPayload?: { pincode: string; inhandIncome: string; empStatus: EmpStatus };
+    },
     signal?: AbortSignal
   ) {
-    const qs = new URLSearchParams();
-    if (params.slug) qs.set('slug', params.slug);
-    if (params.sort_by) qs.set('sort_by', params.sort_by);
-    const url = `${BASE_URL}/cardgenius/cards${qs.toString() ? `?${qs}` : ''}`;
-    const response = await authManager.makeAuthenticatedRequest(url, { method: 'GET', signal });
+    // The guide's enum is recommended | annual_savings | annual_fees. The app's
+    // internal default is "priority", which is not one of them; the endpoint
+    // currently ignores sort_by entirely, but sending a documented value keeps
+    // this working if it ever starts validating.
+    const SORTS = ['recommended', 'annual_savings', 'annual_fees'];
+    const body: Record<string, unknown> = {
+      sort_by: params.sort_by && SORTS.includes(params.sort_by) ? params.sort_by : 'recommended',
+    };
+    if (params.slug) body.slug = params.slug;
+    if (params.eligiblityPayload) body.eligiblityPayload = params.eligiblityPayload;
+
+    const response = await authManager.makeAuthenticatedRequest(
+      `${BASE_URL}/cardgenius/cards`,
+      { method: 'POST', body: JSON.stringify(body), signal }
+    );
     return response.json();
   },
 
