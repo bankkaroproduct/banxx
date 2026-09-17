@@ -91,7 +91,25 @@ export const openRedirectInterstitial = async (params: RedirectParams): Promise<
 
   const destinationUrl = normalizedNetworkUrl;
 
-  if (destinationUrl && findPlaceholder(destinationUrl)) {
+  /**
+   * No usable destination. Every rejection above — missing networkUrl, empty
+   * campaign_id, non-HTTPS, unparseable — funnels into an empty string, and the
+   * code then carried on and opened the interstitial with `url=` unset. Five
+   * cards in the catalogue ship `campaign_id=&`, so their Apply Now button was
+   * live, silent, and went nowhere: no toast, no error, just a dead tab.
+   *
+   * Fail the same way the placeholder guard does.
+   */
+  if (!destinationUrl) {
+    console.error(
+      '[redirect] BLOCKED: no usable application URL for this card',
+      { networkUrl: params.networkUrl, cardName }
+    );
+    toast.error('This application link is unavailable. Please try another card.');
+    return null;
+  }
+
+  if (findPlaceholder(destinationUrl)) {
     console.error(
       '[redirect] BLOCKED: catalogue URL contains an unsubstituted placeholder',
       { placeholder: findPlaceholder(destinationUrl), url: destinationUrl, source: 'catalogue' }

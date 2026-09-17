@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { feeCalc } from '@/lib/feeUtils';
 import { redirectToCardApplication } from '@/utils/redirectHandler';
+import { trackApplyClicked, trackCardCompareViewed } from '@/services/journeyTrack';
 import { cardService } from '@/services/cardService';
 import { getCardAlias, getCardKey } from '@/utils/cardAlias';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -180,6 +181,15 @@ export function ComparePanel({ open, onOpenChange, preSelectedCard }: ComparePan
   const activeCards = resolvedSlots.filter(Boolean);
 
   const handleApply = (card: any) => {
+    // EVT-031 apply_clicked. The compare tray is a surface that offers an apply
+    // button, and the plan requires the event from every one of them — without
+    // it a card-out originating in compare is invisible in the funnel.
+    trackApplyClicked({
+      cardId: getCardAlias(card) || card?.seo_card_alias || card?.card_alias,
+      cardName: card?.name || card?.card_name,
+      bank: card?.banks?.name,
+      sourceSurface: 'compare',
+    });
     // Apply is not gated on an eligibility check.
     redirectToCardApplication(card);
   };
