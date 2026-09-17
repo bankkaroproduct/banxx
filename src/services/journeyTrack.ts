@@ -1,6 +1,7 @@
 import ReactGA from "react-ga4";
 import { brandConfig } from "@/config/brand.config";
 import { authManager } from "@/services/authManager";
+import { getStoredAttribution, readAttributionFromParams, type Attribution } from "@/lib/attribution";
 
 const PARTNER_NAME = brandConfig.name;
 
@@ -24,22 +25,59 @@ interface JourneyEvent {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Attribution for the event about to be sent: utm_source/medium/campaign and
+ * the partner ids p1-p3, from the entry URL.
+ *
+ * Read per event rather than captured once, because a session can be re-entered
+ * on a different link.
+ *
+ * The URL is consulted when the store is empty, which is not a rare edge: on a
+ * partner landing the attribution is persisted by an effect in BanxxHome, while
+ * the page-view event is fired by an effect in its child. React runs child
+ * effects first, so home_page_view — the first and most valuable event of a
+ * paid session — went out with no attribution at all. Falling back to the live
+ * URL fixes that without depending on effect ordering.
+ *
+ * Both sources compact, so absent values are omitted rather than sent blank.
+ */
+function currentAttribution(): Attribution {
+  const stored = getStoredAttribution();
+  if (Object.keys(stored).length > 0) return stored;
+  if (typeof window === 'undefined') return {};
+  try {
+    return readAttributionFromParams(new URLSearchParams(window.location.search));
+  } catch {
+    return {};
+  }
+}
+
 async function sendJourneyEvent(event: JourneyEvent): Promise<void> {
   try {
+    const attribution = currentAttribution();
+
     // 1. Send to GA4
     try {
       ReactGA.event(event.event_name, {
         partner_name: PARTNER_NAME,
         device_type: getDeviceType(),
+        ...attribution,
         ...event.metadata,
       });
     } catch { /* silent */ }
 
     // 2. Send to JT backend with partner-token (backend resolves partner name from token)
+    //
+    // Attribution sits at the top level, alongside session_id and device_type:
+    // it is session context, not a property of the individual event, and it
+    // keeps the names identical to the entry-URL params the backend already
+    // speaks. Everything event-specific stays under metadata. If JT turns out
+    // to want it nested, this spread is the only line that moves.
     const payload = {
       event_name: event.event_name,
       session_id: getSessionId(),
       device_type: getDeviceType(),
+      ...attribution,
       metadata: event.metadata || {},
     };
 
