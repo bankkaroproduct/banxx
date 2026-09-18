@@ -23,7 +23,7 @@ import { cardService, extractEligibleAliases, SpendingData } from "@/services/ca
 import { EligibilityChips, type EligibilityBasis } from "@/components/EligibilityChips";
 import { hydrateAndLog, type HydrationResult, type EligibilityField } from "@/lib/hydration";
 import { persistAttribution } from "@/lib/attribution";
-import { saveEligibility } from "@/lib/eligibilityStore";
+import { saveEligibility, loadEligibility, loadEligibleAliases } from "@/lib/eligibilityStore";
 import {
   EMP_STATUS_OPTIONS,
   isValidPincode,
@@ -752,6 +752,28 @@ const CardListing = () => {
    * renders prefilled with whatever did resolve and focus goes to the first
    * unresolved field. A failed param is never defaulted.
    */
+  /**
+   * Re-apply an eligibility result this session already resolved.
+   *
+   * The basis and the resolved alias set both live in the session store, so
+   * this restores the filter without a second call to the eligibility API.
+   * Returns whether anything was restored.
+   */
+  const restoreEligibilityFromSession = (): boolean => {
+    const basis = loadEligibility();
+    const aliases = loadEligibleAliases();
+    if (!aliases || !basis.pincode || basis.inhandIncome == null) return false;
+
+    setEligibility({
+      pincode: basis.pincode,
+      inhandIncome: String(basis.inhandIncome),
+      empStatus: basis.empStatus ?? "",
+    });
+    setEligibleCardAliases(aliases);
+    setEligibilitySubmitted(true);
+    return true;
+  };
+
   useEffect(() => {
     if (hydratedOnce.current) return;
     hydratedOnce.current = true;
@@ -778,6 +800,12 @@ const CardListing = () => {
         { pincode: pincode!, inhandIncome: inhandIncome!, empStatus: empStatus! },
         { announce: false }
       );
+    } else if (restoreEligibilityFromSession()) {
+      // Nothing in the URL, but this session already resolved eligibility.
+      // eligibilitySubmitted and eligibleCardAliases are component state, so
+      // leaving the listing for a calculator and coming back remounted it clean
+      // and silently showed the full catalogue again — the user had filtered to
+      // the cards they qualify for and got all 170 back with no explanation.
     } else if (result.attempted) {
       // Open the mobile collapsible so the prefilled form is visible without a tap.
       setEligibilityOpen(true);

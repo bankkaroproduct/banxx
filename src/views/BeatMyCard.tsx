@@ -343,10 +343,26 @@ const BeatMyCard = () => {
         // Recommend only cards the user qualifies for. Their own card is looked
         // up from the unfiltered savingsArray below: they already hold it, so
         // eligibility is irrelevant to showing it as the comparison baseline.
-        const eligibleSorted = filterToEligible(sortedCards, loadEligibleAliases());
+        //
+        // The candidate set also excludes the card they already hold. When their
+        // own card happened to rank first for their spends — which is exactly
+        // what happens to a well-chosen card — the page compared it against
+        // itself: "SBI Cashback vs SBI Cashback", with an Apply button for the
+        // card they are already holding.
+        const isSelectedCard = (card: any) =>
+          card?.seo_card_alias === selectedCard.seo_card_alias ||
+          card?.card_alias === selectedCard.seo_card_alias;
+
+        const eligibleSorted = filterToEligible(sortedCards, loadEligibleAliases())
+          .filter((card: any) => !isSelectedCard(card));
         const topCard = eligibleSorted[0];
         if (!topCard) {
-          toast.error("We couldn't find a better card you're eligible for. Try adjusting your spends.");
+          // Either nothing else qualifies, or their card genuinely is the best
+          // available. Both are a real answer, not an error.
+          toast.success("Your card is already the best match", {
+            description: "We couldn't find a card you're eligible for that beats it.",
+          });
+          setIsCalculating(false);
           return;
         }
 
